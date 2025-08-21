@@ -33,7 +33,7 @@ export default function App(): React.ReactNode {
             <SparklesIcon className="w-10 h-10 sm:w-12 sm:h-12 text-blue-500" />
             <div className="text-center sm:text-left">
               <h1 className="text-2xl sm:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-purple-600 dark:from-blue-400 dark:to-purple-500">
-                ContentForge AI
+                HTML Snippet AI
               </h1>
               <p className="text-md text-slate-600 dark:text-slate-400">
                 From the creators of <a href="https://affiliatemarketingforsuccess.com" target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-600 dark:text-blue-400 hover:underline">AffiliateMarketingForSuccess.com</a>
@@ -52,10 +52,10 @@ export default function App(): React.ReactNode {
           <>
             <div className="text-center my-8 animate-fade-in">
               <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight leading-tight">
-                The Sizzle That Sets Your Blog Apart.
+                Beyond Words: AI Tools That Win Readers & Rankings.
               </h2>
               <p className="mt-4 max-w-3xl mx-auto text-lg sm:text-xl text-slate-600 dark:text-slate-400">
-                Instantly embed AI-generated interactive tools to captivate readers and dominate search rankings. Go from static text to an interactive experience in <span className="font-bold text-slate-800 dark:text-slate-200">minutes</span>, not days.
+                Generate bespoke HTML tools from your content. Captivate readers, boost engagement, and earn the rankings you deserve.
               </p>
             </div>
 
@@ -82,7 +82,7 @@ export default function App(): React.ReactNode {
 
         <footer className="text-center mt-8 sm:mt-12 py-6 border-t border-slate-200 dark:border-slate-800">
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            © {new Date().getFullYear()} ContentForge AI by <a href="https://affiliatemarketingforsuccess.com" target="_blank" rel="noopener noreferrer" className="hover:underline">AffiliateMarketingForSuccess.com</a>
+            © {new Date().getFullYear()} HTML Snippet AI by <a href="https://affiliatemarketingforsuccess.com" target="_blank" rel="noopener noreferrer" className="hover:underline">AffiliateMarketingForSuccess.com</a>
           </p>
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-2 space-x-2">
             <a href="https://affiliatemarketingforsuccess.com/blog/" target="_blank" rel="noopener noreferrer" className="hover:underline">Blog</a>

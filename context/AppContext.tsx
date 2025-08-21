@@ -1,5 +1,6 @@
+
 import React, { createContext, useReducer, useContext, useCallback, useMemo, useEffect } from 'react';
-import { AppState, Step, WordPressConfig, WordPressPost, ToolIdea, AiProvider, ApiKeys, ApiValidationStatuses, ApiValidationStatus, Theme } from '../types';
+import { AppState, Step, WordPressConfig, WordPressPost, ToolIdea, AiProvider, ApiKeys, ApiValidationStatuses, ApiValidationStatus, Theme, ApiValidationErrorMessages } from '../types';
 import { fetchPosts, updatePost, checkSetup, createCfTool, deleteCfTool } from '../services/wordpressService';
 import { validateApiKey, suggestToolIdeas, insertShortcodeIntoContent, generateHtmlSnippetStream } from '../services/aiService';
 import { SHORTCODE_DETECTION_REGEX, SHORTCODE_REMOVAL_REGEX } from '../constants';
@@ -36,6 +37,7 @@ const THEME_KEY = 'app_theme';
 
 const initialApiKeys: ApiKeys = { gemini: '', openai: '', anthropic: '', openrouter: '' };
 const initialValidationStatuses: ApiValidationStatuses = { gemini: 'idle', openai: 'idle', anthropic: 'idle', openrouter: 'idle' };
+const initialApiValidationErrorMessages: ApiValidationErrorMessages = { gemini: null, openai: null, anthropic: null, openrouter: null };
 
 const getInitialTheme = (): Theme => {
     if (typeof window === 'undefined') return 'light';
@@ -51,9 +53,11 @@ const initialState: AppState = {
   error: null,
   deletingPostId: null,
   theme: getInitialTheme(),
+  frameStatus: 'initializing',
   // AI State
   apiKeys: initialApiKeys,
   apiValidationStatuses: initialValidationStatuses,
+  apiValidationErrorMessages: initialApiValidationErrorMessages,
   selectedProvider: AiProvider.Gemini,
   openRouterModel: '',
   // WP State

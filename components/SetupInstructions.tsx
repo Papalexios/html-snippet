@@ -9,7 +9,7 @@ interface SetupInstructionsProps {
 }
 
 const phpSnippet = `
-// Creates a Custom Post Type for ContentForge AI Tools
+// Creates a Custom Post Type for HTML Snippet AI Tools
 function contentforge_register_tool_cpt() {
     $args = array(
         'public'       => false,
@@ -80,7 +80,7 @@ export default function SetupInstructions({ onRetryConnection }: SetupInstructio
               <p>Go to <strong>Code Snippets &rarr; Add Snippet</strong>, and click <strong>"Add Your Custom Code"</strong>.</p>
             </Step>
             <Step number={3} title="Paste the Code">
-              <p>Give your snippet a title like "ContentForge AI Helper". Ensure the "Code Type" is set to <strong>"PHP Snippet"</strong>. Paste the code from the right into the editor.</p>
+              <p>Give your snippet a title like "HTML Snippet AI Helper". Ensure the "Code Type" is set to <strong>"PHP Snippet"</strong>. Paste the code from the right into the editor.</p>
             </Step>
              <Step number={4} title="Activate the Snippet">
               <p>Scroll down to the "Insertion" section. Ensure it is set to <strong>"Auto Insert"</strong> and the "Location" is <strong>"Run Everywhere"</strong>. Toggle the snippet to <strong>"Active"</strong> and click <strong>"Save Snippet"</strong>.</p>
