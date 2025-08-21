@@ -1,0 +1,19 @@
+.blinking-cursor {
+  display: inline-block;
+  width: 8px;
+  height: 1.2em;
+  background-color: #60a5fa; /* Tailwind blue-400 */
+  animation: blink 1s step-end infinite;
+  vertical-align: bottom;
+  margin-left: 2px;
+}
+
+@keyframes blink {
+  50% {
+    background-color: transparent;
+  }
+}
+
+.dark .blinking-cursor {
+  background-color: #93c5fd; /* Tailwind blue-300 */
+}
