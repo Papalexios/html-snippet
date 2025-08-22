@@ -1,4 +1,5 @@
 
+
 import React, { useEffect, useRef, useState } from 'react';
 import { Card } from './common/Card';
 import { Button } from './common/Button';
@@ -73,12 +74,14 @@ export default function Step3Generate(): React.ReactNode {
       let finalSnippet = generatedSnippet;
       const hsl = hexToHsl(themeColor);
       if (hsl) {
-        const newHslString = `${hsl.h} ${hsl.s}% ${hsl.l}%`;
-        // Use a regex to replace the accent color variable in the style block
-        finalSnippet = generatedSnippet.replace(
-          /(--accent-color:\s*)[^;]+(;)/,
-          `$1${newHslString}$2`
-        );
+        const baseHsl = `${hsl.h} ${hsl.s}% ${hsl.l}%`;
+        const hoverHsl = `${hsl.h} ${hsl.s}% ${Math.max(0, hsl.l - 8)}%`;
+        const focusRingHsl = `${hsl.h} ${hsl.s}% ${Math.min(100, hsl.l + 20)}%`;
+        
+        // Use regex to replace all accent color variables in the style block
+        finalSnippet = finalSnippet.replace(/(--accent-color:\s*)[^;]+(;)/, `$1${baseHsl}$2`);
+        finalSnippet = finalSnippet.replace(/(--accent-color-hover:\s*)[^;]+(;)/, `$1${hoverHsl}$2`);
+        finalSnippet = finalSnippet.replace(/(--accent-color-focus-ring:\s*)[^;]+(;)/, `$1${focusRingHsl}$2`);
       }
       // Wrap the fragment in a full HTML document for the iframe
       setIframeSrcDoc(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head><body class="bg-transparent">${finalSnippet}</body></html>`);

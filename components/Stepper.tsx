@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { Step } from '../types';
 import { STEP_DESCRIPTIONS } from '../constants';
@@ -24,7 +25,7 @@ const StepItem: React.FC<{
       return 'bg-blue-600 text-white dark:bg-blue-500';
     }
     if (isCurrent) {
-      return 'border-2 border-blue-600 bg-white text-blue-700 dark:bg-slate-800 dark:text-blue-300 dark:border-blue-500 scale-110';
+      return 'border-2 border-blue-600 bg-white text-blue-700 dark:bg-slate-800 dark:text-blue-300 dark:border-blue-500 scale-110 animate-pulse-slow';
     }
     return 'border-2 border-slate-300 bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400 dark:border-slate-600';
   };
@@ -60,7 +61,7 @@ export default function Stepper({ currentStep }: StepperProps): React.ReactNode 
     <div className="relative max-w-2xl mx-auto">
       <div className="absolute top-5 sm:top-6 left-0 w-full h-1 bg-slate-200 dark:bg-slate-700" aria-hidden="true">
         <div 
-          className="h-1 bg-blue-600 dark:bg-blue-500 transition-all duration-500 ease-in-out" 
+          className="h-1 bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-500 ease-in-out" 
           style={{ width: `${((currentStep - 1) / (steps.length - 1)) * 100}%` }}
         />
       </div>

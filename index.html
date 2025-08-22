@@ -6,10 +6,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>HTML Snippet AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <script>
       // Enable class-based dark mode so the theme toggle works.
       tailwind.config = {
         darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+            },
+          },
+        },
       }
     </script>
   <script type="importmap">
@@ -24,6 +34,38 @@
 }
 </script>
 <style>
+  html {
+    --bg-color-1: #02041b;
+    --bg-color-2: #0f172a;
+    --bg-color-3: #1e293b;
+    --bg-color-4: #475569;
+  }
+  html.light {
+    --bg-color-1: #ffffff;
+    --bg-color-2: #f1f5f9;
+    --bg-color-3: #e2e8f0;
+    --bg-color-4: #cbd5e1;
+  }
+  .gradient-bg {
+    width: 100vw;
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: -1;
+    background: linear-gradient(300deg, var(--bg-color-1), var(--bg-color-2), var(--bg-color-3), var(--bg-color-4));
+    background-size: 400% 400%;
+    animation: gradientAnimation 25s ease infinite;
+    transition: background 0.5s ease;
+  }
+  @keyframes gradientAnimation {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  @keyframes pulse-slow { 50% { opacity: .7; } }
+  .animate-pulse-slow { animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+
   .blinking-cursor {
     display: inline-block;
     width: 8px;
@@ -43,7 +85,8 @@
   }
 </style>
 </head>
-  <body class="bg-slate-50 dark:bg-slate-900">
+  <body>
+    <div class="gradient-bg"></div>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

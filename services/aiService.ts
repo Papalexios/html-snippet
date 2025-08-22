@@ -164,17 +164,24 @@ export async function suggestToolIdeas(state: AppState, postTitle: string, postC
     }
 }
 
-// --- NEW UTILITY FUNCTION for HTML Generation ---
-function hexToHsl(hex: string): { h: number, s: number, l: number } {
+// --- UTILITY FUNCTION for HTML Generation ---
+function hexToHsl(hex: string): { h: number, s: number, l: number } | null {
+    if (!hex || typeof hex !== 'string') return null;
     let r = 0, g = 0, b = 0;
-    if (hex.length === 4) {
-        r = parseInt(hex[1] + hex[1], 16);
-        g = parseInt(hex[2] + hex[2], 16);
-        b = parseInt(hex[3] + hex[3], 16);
-    } else if (hex.length === 7) {
-        r = parseInt(hex[1] + hex[2], 16);
-        g = parseInt(hex[3] + hex[4], 16);
-        b = parseInt(hex[5] + hex[6], 16);
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    if(result){
+        r = parseInt(result[1], 16);
+        g = parseInt(result[2], 16);
+        b = parseInt(result[3], 16);
+    } else {
+        const shorthandResult = /^#?([a-f\d])([a-f\d])([a-f\d])$/i.exec(hex);
+        if(shorthandResult){
+            r = parseInt(shorthandResult[1] + shorthandResult[1], 16);
+            g = parseInt(shorthandResult[2] + shorthandResult[2], 16);
+            b = parseInt(shorthandResult[3] + shorthandResult[3], 16);
+        } else {
+            return null;
+        }
     }
     r /= 255; g /= 255; b /= 255;
     const max = Math.max(r, g, b), min = Math.min(r, g, b);
@@ -196,9 +203,10 @@ function hexToHsl(hex: string): { h: number, s: number, l: number } {
 // --- HTML GENERATION ---
 const getHtmlGenerationPrompt = (postTitle: string, postContent: string, idea: ToolIdea, themeColor: string): string => {
     const cleanContent = stripHtml(postContent).substring(0, 4000);
-    const themeHsl = hexToHsl(themeColor);
+    const themeHsl = hexToHsl(themeColor) || { h: 217, s: 91, l: 60 }; // Default to blue if conversion fails
     const themeHslString = `${themeHsl.h} ${themeHsl.s}% ${themeHsl.l}%`;
     const themeHslHoverString = `${themeHsl.h} ${themeHsl.s}% ${Math.max(0, themeHsl.l - 8)}%`; // Darker for hover
+    const themeHslFocusRingString = `${themeHsl.h} ${themeHsl.s}% ${Math.min(100, themeHsl.l + 20)}%`; // Lighter for focus ring
     const uniqueId = `cforge-tool-${Date.now()}`;
 
     return `
@@ -232,7 +240,7 @@ const getHtmlGenerationPrompt = (postTitle: string, postContent: string, idea: T
             \`#${uniqueId} {
                 --accent-color: ${themeHslString};
                 --accent-color-hover: ${themeHslHoverString};
-                --accent-color-focus-ring: ${themeHsl.h} ${themeHsl.s}% ${themeHsl.l + 20}%;
+                --accent-color-focus-ring: ${themeHslFocusRingString};
              }\`
             Then, use these variables in your Tailwind classes for buttons and focus rings, e.g., \`bg-[hsl(var(--accent-color))] hover:bg-[hsl(var(--accent-color-hover))] focus:ring-[hsl(var(--accent-color-focus-ring))]\`.
 

@@ -26,7 +26,7 @@ export default function App(): React.ReactNode {
   };
 
   return (
-    <div className="min-h-screen text-slate-800 dark:text-slate-200 font-sans antialiased">
+    <div className="min-h-screen text-slate-800 dark:text-slate-200 antialiased">
       <div className="container mx-auto px-4 py-6 sm:py-12">
         <header className="flex flex-col sm:flex-row justify-between items-center mb-8 sm:mb-12 gap-4">
           <div className="flex items-center gap-3 sm:gap-4">
@@ -35,7 +35,7 @@ export default function App(): React.ReactNode {
               <h1 className="text-2xl sm:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-purple-600 dark:from-blue-400 dark:to-purple-500">
                 HTML Snippet AI
               </h1>
-              <p className="text-md text-slate-600 dark:text-slate-400">
+              <p className="text-sm sm:text-base text-slate-500 dark:text-slate-400">
                 From the creators of <a href="https://affiliatemarketingforsuccess.com" target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-600 dark:text-blue-400 hover:underline">AffiliateMarketingForSuccess.com</a>
               </p>
             </div>
@@ -51,7 +51,7 @@ export default function App(): React.ReactNode {
         {state.currentStep === Step.Configure && (
           <>
             <div className="text-center my-8 animate-fade-in">
-              <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight leading-tight">
+              <h2 className="text-3xl sm:text-5xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight leading-tight">
                 Beyond Words: AI Tools That Win Readers & Rankings.
               </h2>
               <p className="mt-4 max-w-3xl mx-auto text-lg sm:text-xl text-slate-600 dark:text-slate-400">
@@ -64,9 +64,9 @@ export default function App(): React.ReactNode {
                 href="https://viral-post.affiliatemarketingforsuccess.com/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-3 px-6 py-4 sm:px-8 text-base sm:text-lg font-bold text-white bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 rounded-full shadow-lg hover:scale-105 hover:shadow-2xl focus:outline-none focus:ring-4 focus:ring-pink-500/50 dark:focus:ring-pink-400/50 transition-all duration-300 ease-in-out transform group"
+                className="inline-flex items-center justify-center gap-3 px-6 py-4 sm:px-8 text-base sm:text-lg font-bold text-white bg-gradient-to-r from-blue-500 to-purple-600 rounded-full shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-purple-500/40 focus:outline-none focus:ring-4 focus:ring-purple-500/50 dark:focus:ring-purple-400/50 transition-all duration-300 ease-in-out transform hover:scale-105 group"
               >
-                <SparklesIcon className="w-6 h-6 transition-transform duration-500 group-hover:rotate-12" />
+                <SparklesIcon className="w-6 h-6 transition-transform duration-500 group-hover:rotate-12 group-hover:scale-110" />
                 <span>Dominate Your Niche – Unlock Your Complete AI-Powered SEO Arsenal</span>
               </a>
             </div>
@@ -75,12 +75,12 @@ export default function App(): React.ReactNode {
 
         <main className="max-w-5xl mx-auto">
           <Stepper currentStep={state.currentStep} />
-          <div className="mt-8 bg-white/70 dark:bg-slate-800/50 rounded-2xl shadow-2xl shadow-slate-200/50 dark:shadow-black/20 p-4 sm:p-10 border border-slate-200/80 dark:border-slate-700/60 backdrop-blur-xl min-h-[calc(100vh-240px)] sm:min-h-[500px]">
+          <div className="mt-8 bg-white/60 dark:bg-slate-900/60 rounded-2xl shadow-2xl shadow-slate-300/20 dark:shadow-black/30 p-4 sm:p-10 border border-white/20 dark:border-slate-700/80 backdrop-blur-2xl min-h-[calc(100vh-240px)] sm:min-h-[500px]">
             {renderStepContent()}
           </div>
         </main>
 
-        <footer className="text-center mt-8 sm:mt-12 py-6 border-t border-slate-200 dark:border-slate-800">
+        <footer className="text-center mt-8 sm:mt-12 py-6 border-t border-slate-200/50 dark:border-slate-800/50">
           <p className="text-sm text-slate-500 dark:text-slate-400">
             © {new Date().getFullYear()} HTML Snippet AI by <a href="https://affiliatemarketingforsuccess.com" target="_blank" rel="noopener noreferrer" className="hover:underline">AffiliateMarketingForSuccess.com</a>
           </p>

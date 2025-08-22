@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { WordPressPost, ToolIdea } from '../types';
 import { Card } from './common/Card';
@@ -40,8 +41,8 @@ const PostCard: React.FC<{
   };
 
   return (
-     <button onClick={onSelect} className={`w-full text-left transition-all duration-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/50 ${isSelected ? 'scale-[1.03] shadow-2xl' : 'hover:scale-[1.02]'}`} aria-pressed={isSelected} disabled={isDeleting}>
-        <Card className={`h-full flex flex-col relative overflow-hidden transition-all ${isSelected ? 'border-blue-500 ring-2 ring-blue-500' : ''} ${isDeleting ? 'opacity-60' : ''}`}>
+     <button onClick={onSelect} className={`w-full text-left transition-all duration-300 ease-out rounded-xl focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/50 ${isSelected ? 'shadow-2xl shadow-blue-500/20' : ''}`} aria-pressed={isSelected} disabled={isDeleting}>
+        <Card className={`h-full flex flex-col relative overflow-hidden transition-all ${isSelected ? '!border-blue-500' : ''} ${isDeleting ? 'opacity-60' : ''}`}>
             {statusBadge}
             {isDeleting && (
                 <div className="absolute inset-0 bg-white/50 dark:bg-slate-900/50 flex items-center justify-center z-10 rounded-xl">
