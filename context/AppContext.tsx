@@ -1,7 +1,7 @@
 import React, { createContext, useReducer, useContext, useCallback, useMemo, useEffect } from 'react';
 import { AppState, WordPressConfig, WordPressPost, ToolIdea, AiProvider, ApiKeys, ApiValidationStatuses, ApiValidationStatus, Theme, ApiValidationErrorMessages, Status } from '../types';
 import { fetchPosts, updatePost, checkSetup, createCfTool, deleteCfTool } from '../services/wordpressService';
-import { validateApiKey, suggestToolIdeas, insertShortcodeIntoContent, generateHtmlSnippetStream } from '../services/aiService';
+import { validateApiKey, suggestToolIdeas, generateHtmlSnippetStream } from '../services/aiService';
 import { SHORTCODE_DETECTION_REGEX, SHORTCODE_REMOVAL_REGEX } from '../constants';
 
 type Action =
@@ -271,8 +271,20 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         if (!SHORTCODE_DETECTION_REGEX.test(postToDeleteFrom.content.rendered)) {
              throw new Error("Tool shortcode not found in post content.");
         }
-        const newContent = postToDeleteFrom.content.rendered.replace(SHORTCODE_REMOVAL_REGEX, '');
-        await updatePost(state.wpConfig, postId, newContent);
+        
+        // --- FLAWLESS DELETION Overhaul ---
+        // This multi-pass process ensures a perfectly clean removal,
+        // preventing any leftover empty tags or whitespace that could distort post formatting.
+
+        // Pass 1: Remove all instances of the shortcode itself from the content.
+        let newContent = postToDeleteFrom.content.rendered.replace(SHORTCODE_REMOVAL_REGEX, '');
+
+        // Pass 2: Clean up any <p> tags that are now empty or contain only whitespace (including &nbsp;).
+        // This is crucial for fixing formatting issues caused by WordPress's wpautop filter.
+        const emptyParagraphRegex = /<p[^>]*>(\s|&nbsp;)*<\/p>/gi;
+        newContent = newContent.replace(emptyParagraphRegex, '');
+
+        await updatePost(state.wpConfig, postId, newContent.trim());
         if (toolId) {
             await deleteCfTool(state.wpConfig, toolId);
         }
@@ -328,7 +340,28 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       const { id: newToolId } = await createCfTool(state.wpConfig, state.selectedIdea.title, state.generatedSnippet);
       const shortcode = `[contentforge_tool id="${newToolId}"]`;
-      const newContent = await insertShortcodeIntoContent(state, state.activePostForModal.content.rendered, shortcode);
+      
+      // --- NEW "Safe-Insert" Logic ---
+      // This deterministic method prevents formatting distortion by placing the tool
+      // predictably after the first paragraph, ensuring it's treated as a distinct block.
+      const postContent = state.activePostForModal.content.rendered;
+      const trimmedContent = postContent.trim();
+      const match = /<\/p>/i.exec(trimmedContent);
+      let newContent;
+
+      if (match) {
+        // Insert after the first closing paragraph tag.
+        const insertionPoint = match.index + match[0].length;
+        const contentBefore = trimmedContent.substring(0, insertionPoint);
+        const contentAfter = trimmedContent.substring(insertionPoint);
+        // Add newlines to help WordPress's wpautop treat it as a distinct block element.
+        newContent = `${contentBefore}\n\n${shortcode}\n\n${contentAfter}`;
+      } else {
+        // Fallback: If no <p> tag is found, safely append the shortcode. Prepending can
+        // disrupt layouts that start with headings, images, or custom blocks.
+        newContent = `${trimmedContent}\n\n${shortcode}`;
+      }
+      
       await updatePost(state.wpConfig, state.activePostForModal.id, newContent);
       
       const newPosts = await fetchPosts(state.wpConfig);
