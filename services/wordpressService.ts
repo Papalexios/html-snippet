@@ -42,7 +42,7 @@ export async function fetchPosts(config: WordPressConfig): Promise<WordPressPost
                 throw new Error('Authentication failed. Please check your username and Application Password.');
             }
             if (response.status === 404) {
-                 throw new Error(`Could not find the WordPress REST API endpoint. Ensure your URL is correct and REST API is not disabled.`);
+                 throw new Error(`Could not find the WordPress REST API endpoint. Ensure your URL is correct and the REST API is not disabled.`);
             }
             throw new Error(`Failed to fetch posts. Status: ${response.status}`);
         }
@@ -73,7 +73,7 @@ export async function fetchPosts(config: WordPressConfig): Promise<WordPressPost
     } catch (error) {
         console.error('Fetch posts error:', error);
         if (error instanceof TypeError) { // Often indicates a CORS or network issue
-            throw new Error('A network error occurred. This could be a CORS issue on your WordPress server or an incorrect URL. Check the browser console for more details.');
+            throw new Error('CONNECTION_FAILED: A network error occurred. This is most likely a CORS (Cross-Origin Resource Sharing) issue on your WordPress server. Other potential causes include an incorrect URL, a firewall blocking the request, or your site being offline.');
         }
         throw error;
     }

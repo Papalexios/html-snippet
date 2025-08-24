@@ -1,9 +1,3 @@
-export enum Step {
-  Configure = 1,
-  Analyze = 2,
-  Generate = 3,
-}
-
 export type Status = 'idle' | 'loading' | 'error' | 'success';
 
 export enum AiProvider {
@@ -68,8 +62,7 @@ export type Theme = 'light' | 'dark';
 export type FrameStatus = 'initializing' | 'ready' | 'failed';
 
 export interface AppState {
-  currentStep: Step;
-  status: Status; // For general app status like fetching posts/generating snippets
+  status: Status; // For general app status like fetching posts
   error: string | null;
   deletingPostId: number | null;
   theme: Theme;
@@ -87,10 +80,13 @@ export interface AppState {
   posts: WordPressPost[];
   filteredPosts: WordPressPost[];
   postSearchQuery: string;
-  selectedPost: WordPressPost | null;
   setupRequired: boolean; // Flag to indicate if the PHP snippet setup is needed
 
-  // Generation State
+  // Tool Generation Modal State
+  isToolGenerationModalOpen: boolean;
+  activePostForModal: WordPressPost | null; // The post being edited
+  modalStatus: Status; // Status specific to the modal's async operations
+  modalError: string | null;
   toolIdeas: ToolIdea[];
   selectedIdea: ToolIdea | null;
   generatedSnippet: string;

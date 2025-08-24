@@ -5,14 +5,15 @@ import { WordPressIcon } from './icons/WordPressIcon';
 import { Input } from './common/Input';
 import { WorldIcon, UserIcon, LockIcon } from './icons/FormIcons';
 import { useAppContext } from '../context/AppContext';
-import { Step } from '../types';
 import ApiConfiguration from './ApiConfiguration';
 import { Card } from './common/Card';
 import { ArrowRightIcon } from './icons/ArrowRightIcon';
 import { LightbulbIcon } from './icons/LightbulbIcon';
-import { ChartIcon } from './icons/ToolIcons';
+import { CodeBracketIcon } from './icons/ToolIcons';
 import { CheckIcon } from './icons/CheckIcon';
 import SetupInstructions from './SetupInstructions';
+import { XCircleIcon } from './icons/XCircleIcon';
+import { ClipboardIcon } from './icons/ActionIcons';
 
 const ResourceLink: React.FC<{ title: string; url: string }> = ({ title, url }) => (
   <a href={url} target="_blank" rel="noopener noreferrer" className="block text-left no-underline group focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 rounded-xl">
@@ -46,8 +47,35 @@ const FeatureCard: React.FC<{ icon: React.ReactNode; title: string; children: Re
   </div>
 );
 
+const HtaccessCodeBlock = () => {
+    const [copied, setCopied] = useState(false);
+    const code = `<IfModule mod_headers.c>
+Header set Access-Control-Allow-Origin "*"
+</IfModule>`;
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(code);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2500);
+    };
+
+    return (
+        <div className="relative bg-slate-100 dark:bg-slate-800/50 rounded-md font-mono text-sm text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
+            <button
+                onClick={handleCopy}
+                className="absolute top-2 right-2 flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-white/50 dark:bg-slate-700/50 backdrop-blur-sm px-2 py-1 rounded-md border border-slate-200 dark:border-slate-600 transition-colors"
+            >
+                {copied ? <CheckIcon className="w-4 h-4 text-green-500" /> : <ClipboardIcon className="w-4 h-4" />}
+                {copied ? 'Copied!' : 'Copy'}
+            </button>
+            <pre className="p-4 overflow-x-auto"><code>{code}</code></pre>
+        </div>
+    );
+};
+
+
 export default function Step1Configure(): React.ReactNode {
-  const { state, connectToWordPress } = useAppContext();
+  const { state, connectToWordPress, retryConnection } = useAppContext();
   const [url, setUrl] = useState(state.wpConfig?.url || '');
   const [username, setUsername] = useState(state.wpConfig?.username || '');
   const [appPassword, setAppPassword] = useState('');
@@ -63,22 +91,60 @@ export default function Step1Configure(): React.ReactNode {
   };
 
   if (state.setupRequired) {
-    return <SetupInstructions onRetryConnection={handleSubmit} />;
+    return <SetupInstructions onRetryConnection={retryConnection} />;
   }
+  
+  const renderError = () => {
+    if (!state.error) return null;
+
+    if (state.error.startsWith('CONNECTION_FAILED:')) {
+        const message = state.error.replace('CONNECTION_FAILED: ', '');
+        return (
+            <div className="bg-red-50 dark:bg-red-900/20 border-2 border-dashed border-red-300 dark:border-red-800/50 text-red-800 dark:text-red-200 p-6 rounded-xl space-y-4 my-6">
+                <h3 className="text-xl font-bold flex items-center gap-3">
+                    <XCircleIcon className="w-6 h-6 flex-shrink-0" />
+                    Connection Failed
+                </h3>
+                <p>{message}</p>
+                
+                <h4 className="font-bold pt-2 text-red-900 dark:text-red-100">How to Fix (Most Common Solution)</h4>
+                <p className="text-sm">The most common reason for this error is a server security setting called CORS. You can often fix this by adding the following code to your <code className="text-xs bg-red-100 dark:bg-red-900/30 p-1 rounded">.htaccess</code> file, which is in the main folder of your WordPress installation.</p>
+                
+                <HtaccessCodeBlock />
+                
+                <h4 className="font-bold pt-2 text-red-900 dark:text-red-100">Other Things to Check</h4>
+                <ul className="list-disc list-inside text-sm space-y-1">
+                    <li><strong>Is the Site URL correct?</strong> Double-check for typos and ensure it starts with <code className="text-xs bg-red-100 dark:bg-red-900/30 p-1 rounded">https://</code>.</li>
+                    <li><strong>Is your site online?</strong> Can you access it in a new browser tab?</li>
+                    <li><strong>Is a firewall or security plugin blocking access?</strong> Check settings in plugins like Wordfence or in your hosting provider's dashboard.</li>
+                </ul>
+            </div>
+        );
+    }
+
+    // Fallback for other errors (e.g., authentication)
+    return (
+        <div className="bg-red-100 dark:bg-red-900/50 border border-red-400 dark:border-red-600 text-red-700 dark:text-red-300 px-4 py-3 rounded-md my-6" role="alert">
+            <strong className="font-bold">Error: </strong>
+            <span className="block sm:inline">{state.error}</span>
+        </div>
+    );
+  };
+
 
   return (
-    <div className="animate-fade-in space-y-10 sm:space-y-16">
+    <div className="bg-white/60 dark:bg-slate-900/60 rounded-2xl shadow-2xl shadow-slate-300/20 dark:shadow-black/30 p-4 sm:p-10 border border-white/20 dark:border-slate-700/80 backdrop-blur-2xl animate-fade-in space-y-10 sm:space-y-16">
        {/* Unique Features */}
       <section className="text-center">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
-           <FeatureCard icon={<LightbulbIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />} title="Exclusive AI Idea Engine">
-              Unlike others, our AI analyzes your post to suggest unique, context-aware tools that competitors can't replicate.
+           <FeatureCard icon={<LightbulbIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />} title="Elite AI Idea Engine">
+              Our AI analyzes your posts to suggest context-aware tools that competitors can't replicate, turning static content into interactive assets.
+           </FeatureCard>
+           <FeatureCard icon={<CodeBracketIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />} title="Masterpiece Code">
+              Receive production-ready, fully responsive, and accessible HTML snippets built to the highest industry standards, complete with perfect dark mode.
            </FeatureCard>
            <FeatureCard icon={<CheckIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />} title="1-Click WordPress Insertion">
-              No more messy shortcodes. We inject flawless, responsive code perfectly into your post with a single click.
-           </FeatureCard>
-           <FeatureCard icon={<ChartIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />} title="Industry-Leading SEO Boost">
-             Turn passive readers into active users. Increase time-on-page and signal topical authority to Google.
+             Our intelligent placement engine analyzes your content and surgically injects the tool for maximum impact with a single click.
            </FeatureCard>
         </div>
       </section>
@@ -86,18 +152,18 @@ export default function Step1Configure(): React.ReactNode {
        {/* Social Proof */}
       <section>
         <h2 className="text-center text-xl font-bold text-slate-800 dark:text-slate-100 mb-6">
-          Trusted by Bloggers Who Lead
+          Trusted by Industry-Leading Publishers
         </h2>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl mx-auto">
           <Card className="!p-5 bg-white dark:bg-slate-800/80">
             <blockquote className="text-slate-600 dark:text-slate-300">
-              <p>"ContentForge is a game-changer. I added a calculator to a finance post, and my engagement time doubled overnight. My competitors are still just writing paragraphs."</p>
+              <p>"This is a quantum leap for content creators. I added a custom ROI calculator to a finance post, and my average time-on-page tripled. The quality of the generated code is simply breathtaking."</p>
               <footer className="mt-3 text-sm font-semibold text-slate-800 dark:text-slate-100">- Sarah J., Niche Site Owner</footer>
             </blockquote>
           </Card>
           <Card className="!p-5 bg-white dark:bg-slate-800/80">
             <blockquote className="text-slate-600 dark:text-slate-300">
-              <p>"I'm not a coder, but now I can create professional interactive tools in minutes. It's the only tool that truly understands my content and suggests relevant enhancements."</p>
+              <p>"As a non-coder, the ability to generate and insert flawless, interactive tools is revolutionary. It's the only tool that truly understands my content's intent and suggests relevant, high-impact enhancements."</p>
               <footer className="mt-3 text-sm font-semibold text-slate-800 dark:text-slate-100">- Mark T., Affiliate Blogger</footer>
             </blockquote>
           </Card>
@@ -181,16 +247,11 @@ export default function Step1Configure(): React.ReactNode {
             </p>
           </div>
 
-          {state.error && state.currentStep === Step.Configure && (
-            <div className="bg-red-100 dark:bg-red-900/50 border border-red-400 dark:border-red-600 text-red-700 dark:text-red-300 px-4 py-3 rounded-md" role="alert">
-              <strong className="font-bold">Error: </strong>
-              <span className="block sm:inline">{state.error}</span>
-            </div>
-          )}
+          {renderError()}
 
           <div className="pt-2">
             <Button type="submit" disabled={state.status === 'loading' || !isApiKeyValid} className="w-full" size="large">
-              {state.status === 'loading' ? <><Spinner /> Connecting...</> : 'Connect & Fetch Posts'}
+              {state.status === 'loading' ? <><Spinner /> Connecting...</> : 'Connect & Open Dashboard'}
             </Button>
             {!isApiKeyValid && (
                 <p className="mt-2 text-xs text-center text-yellow-600 dark:text-yellow-400">

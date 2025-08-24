@@ -111,13 +111,7 @@ export async function suggestToolIdeas(state: AppState, postTitle: string, postC
             const response = await ai.models.generateContent({
                 model: AI_PROVIDERS.gemini.defaultModel,
                 contents: prompt,
-                config: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: Type.OBJECT,
-                        properties: { ideas: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, description: { type: Type.STRING }, icon: { type: Type.STRING } } } } }
-                    },
-                },
+                config: { responseMimeType: "application/json" },
             });
             responseText = response.text;
         } else {
@@ -133,25 +127,16 @@ export async function suggestToolIdeas(state: AppState, postTitle: string, postC
         }
         
         let jsonString = responseText.substring(firstBrace, lastBrace + 1);
-
-        // Sanitize the string to remove control characters like newlines which can break JSON.parse.
-        jsonString = jsonString.replace(/[\r\n\t]/g, ' ');
-
         const result = JSON.parse(jsonString);
         
-        // Robustly find the array of ideas, regardless of the key name (e.g., "ideas", " ", "tools").
-        const ideasArray = Object.values(result).find(value => Array.isArray(value)) as any[];
+        const ideasArray = result.ideas || [];
 
-        if (ideasArray) {
+        if (Array.isArray(ideasArray) && ideasArray.length > 0) {
             // Filter to ensure the items in the array match the ToolIdea structure.
-            const validIdeas = ideasArray.filter(item =>
+            return ideasArray.filter(item =>
                 typeof item === 'object' && item !== null &&
                 'title' in item && 'description' in item && 'icon' in item
-            );
-
-            if (validIdeas.length > 0) {
-                return validIdeas.slice(0, 3);
-            }
+            ).slice(0, 3);
         }
         
         throw new Error("AI did not return valid tool ideas in the expected format.");
@@ -334,16 +319,10 @@ export async function insertShortcodeIntoContent(state: AppState, postContent: s
     try {
         if (state.selectedProvider === AiProvider.Gemini) {
             const ai = new GoogleGenAI({ apiKey: state.apiKeys.gemini });
-            const response = await ai.models.generateContent({
+             const response = await ai.models.generateContent({
                 model: AI_PROVIDERS.gemini.defaultModel,
                 contents: prompt,
-                config: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: Type.OBJECT,
-                        properties: { markerId: { type: Type.STRING, description: "The ID of the marker to replace, e.g., CFORGE_MARKER_5" } }
-                    }
-                }
+                config: { responseMimeType: "application/json" },
             });
             responseText = response.text;
         } else {
@@ -481,11 +460,12 @@ export async function* generateHtmlSnippetStream(state: AppState, postTitle: str
     try {
         if (selectedProvider === AiProvider.Gemini) {
             const ai = new GoogleGenAI({ apiKey });
-            const stream = await ai.models.generateContentStream({
+            const response = await ai.models.generateContentStream({
                 model: AI_PROVIDERS.gemini.defaultModel,
                 contents: prompt,
             });
-            for await (const chunk of stream) {
+            
+            for await (const chunk of response) {
                 yield chunk.text;
             }
         } else {
@@ -521,7 +501,7 @@ export async function* generateHtmlSnippetStream(state: AppState, postTitle: str
                 throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorData?.error?.message || 'Unknown error'}`);
             }
             
-            yield* streamSse(response.body, selectedProvider);
+            yield* streamSse(response.body, selectedProvider as 'openai' | 'anthropic' | 'openrouter');
         }
     } catch (error) {
         console.error("AI API error in generateHtmlSnippetStream:", error);

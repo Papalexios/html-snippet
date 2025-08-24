@@ -1,29 +1,15 @@
 import React from 'react';
-import { Step } from './types';
-import Stepper from './components/Stepper';
-import Step1Configure from './components/Step1_Configure';
-import Step2Analyze from './components/Step2_Analyze';
-import Step3Generate from './components/Step3_Generate';
 import { useAppContext } from './context/AppContext';
+import Step1Configure from './components/Step1_Configure';
+import PostDashboard from './components/PostDashboard';
 import { Button } from './components/common/Button';
 import { SparklesIcon } from './components/icons/SparklesIcon';
 import ThemeToggle from './components/ThemeToggle';
+import ToolGenerationModal from './components/ToolGenerationModal';
 
 export default function App(): React.ReactNode {
   const { state, reset } = useAppContext();
-
-  const renderStepContent = () => {
-    switch (state.currentStep) {
-      case Step.Configure:
-        return <Step1Configure />;
-      case Step.Analyze:
-        return <Step2Analyze />;
-      case Step.Generate:
-        return <Step3Generate />;
-      default:
-        return <div>Invalid Step</div>;
-    }
-  };
+  const isConnected = !!state.wpConfig;
 
   return (
     <div className="min-h-screen text-slate-800 dark:text-slate-200 antialiased">
@@ -42,13 +28,13 @@ export default function App(): React.ReactNode {
           </div>
           <div className="flex items-center gap-4">
             <ThemeToggle />
-            {state.currentStep !== Step.Configure && (
-               <Button onClick={reset} variant="secondary">Start Over</Button>
+            {isConnected && (
+               <Button onClick={reset} variant="secondary">Disconnect</Button>
             )}
           </div>
         </header>
         
-        {state.currentStep === Step.Configure && (
+        {!isConnected && (
           <>
             <div className="text-center my-8 animate-fade-in">
               <h2 className="text-3xl sm:text-5xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight leading-tight">
@@ -73,12 +59,11 @@ export default function App(): React.ReactNode {
           </>
         )}
 
-        <main className="max-w-5xl mx-auto">
-          <Stepper currentStep={state.currentStep} />
-          <div className="mt-8 bg-white/60 dark:bg-slate-900/60 rounded-2xl shadow-2xl shadow-slate-300/20 dark:shadow-black/30 p-4 sm:p-10 border border-white/20 dark:border-slate-700/80 backdrop-blur-2xl min-h-[calc(100vh-240px)] sm:min-h-[500px]">
-            {renderStepContent()}
-          </div>
+        <main className="max-w-7xl mx-auto">
+          {isConnected ? <PostDashboard /> : <Step1Configure />}
         </main>
+        
+        <ToolGenerationModal />
 
         <footer className="text-center mt-8 sm:mt-12 py-6 border-t border-slate-200/50 dark:border-slate-800/50">
           <p className="text-sm text-slate-500 dark:text-slate-400">

@@ -1,19 +1,4 @@
-import { Step, AiProvider } from './types';
-
-export const STEP_DESCRIPTIONS: Record<Step, { title: string; description: string }> = {
-  [Step.Configure]: {
-    title: 'Configure Connection',
-    description: 'Connect to your WordPress site.',
-  },
-  [Step.Analyze]: {
-    title: 'Analyze & Select',
-    description: 'Choose a post and an enhancement idea.',
-  },
-  [Step.Generate]: {
-    title: 'Generate & Insert',
-    description: 'Generate HTML and update your post.',
-  },
-};
+import { AiProvider } from './types';
 
 export const AI_PROVIDERS: Record<AiProvider, { name: string, defaultModel: string, requiresModelField?: boolean }> = {
   [AiProvider.Gemini]: {
