@@ -20,10 +20,27 @@ export async function checkSetup(config: WordPressConfig): Promise<boolean> {
                 'Authorization': getAuthHeader(config),
             },
         });
-        return response.ok;
+
+        if (response.status === 404) {
+            // This is the expected "not found" if the snippet isn't installed.
+            return false;
+        }
+        if (response.status === 401) {
+            throw new Error('Authentication failed. Please check your username and Application Password.');
+        }
+        if (!response.ok) {
+            throw new Error(`The WordPress API returned an unexpected status during setup check: ${response.status}`);
+        }
+        // if response is ok, CPT exists.
+        return true;
     } catch (error) {
         console.error("Setup check failed:", error);
-        return false;
+        if (error instanceof TypeError) { // Most likely a CORS or network issue
+            // This is the key fix: Propagate a specific, helpful error for CORS issues during the first connection test.
+            throw new Error('CONNECTION_FAILED: A network error occurred. This is most likely a CORS (Cross-Origin Resource Sharing) issue on your WordPress server. Other potential causes include an incorrect URL, a firewall blocking the request, or your site being offline.');
+        }
+        // rethrow other errors from response.ok checks etc.
+        throw error;
     }
 }
 
