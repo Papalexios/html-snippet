@@ -83,9 +83,10 @@ export default function ToolGenerationModal() {
     const [activeTab, setActiveTab] = useState<'code' | 'preview'>('code');
     const [iframeSrcDoc, setIframeSrcDoc] = useState('');
 
-    const isGeneratingIdeas = modalStatus === 'loading' && toolIdeas.length === 0;
-    const isGeneratingSnippet = modalStatus === 'loading' && !!selectedIdea && generatedSnippet.length === 0;
-    const isInserting = modalStatus === 'loading' && generatedSnippet.length > 0 && !isGeneratingSnippet;
+    const isGeneratingIdeas = modalStatus === 'loading_ideas';
+    const isStreaming = modalStatus === 'generating_snippet';
+    const isInserting = modalStatus === 'inserting_snippet';
+    const isLoading = isGeneratingIdeas || isStreaming || isInserting;
 
     const currentStage = useMemo(() => {
         if (modalStatus === 'success') return 'success';
@@ -102,7 +103,7 @@ export default function ToolGenerationModal() {
     }, [isToolGenerationModalOpen, activePostForModal, toolIdeas.length, modalStatus, generateIdeasForModal, closeToolGenerationModal]);
 
     useEffect(() => {
-        if (selectedIdea && generatedSnippet.length === 0 && modalStatus !== 'loading') {
+        if (selectedIdea && generatedSnippet.length === 0 && modalStatus === 'idle') {
             generateSnippetForModal();
         }
     }, [selectedIdea, generatedSnippet.length, modalStatus, generateSnippetForModal]);
@@ -117,8 +118,8 @@ export default function ToolGenerationModal() {
     }, [isGeneratingIdeas]);
 
     useEffect(() => {
-        if (isGeneratingSnippet) setActiveTab('code');
-    }, [isGeneratingSnippet]);
+        if (isStreaming) setActiveTab('code');
+    }, [isStreaming]);
 
     useEffect(() => {
         if (generatedSnippet) {
@@ -127,10 +128,16 @@ export default function ToolGenerationModal() {
             if (hsl) {
                 const baseHsl = `${hsl.h} ${hsl.s}% ${hsl.l}%`;
                 const hoverHsl = `${hsl.h} ${hsl.s}% ${Math.max(0, hsl.l - 8)}%`;
-                const focusRingHsl = `${hsl.h} ${hsl.s}% ${Math.min(100, hsl.l + 20)}%`;
-                finalSnippet = finalSnippet.replace(/(--accent-color:\s*)[^;]+(;)/, `$1${baseHsl}$2`).replace(/(--accent-color-hover:\s*)[^;]+(;)/, `$1${hoverHsl}$2`).replace(/(--accent-color-focus-ring:\s*)[^;]+(;)/, `$1${focusRingHsl}$2`);
+                const focusRingHsl = `${hsl.h} ${hsl.s}% ${Math.min(100, hsl.l + 30)}%`;
+
+                // More robustly replace all CSS variables if they exist
+                finalSnippet = finalSnippet.replace(/--accent-color:\s*[^;]+;/, `--accent-color: ${baseHsl};`);
+                finalSnippet = finalSnippet.replace(/--accent-color-hover:\s*[^;]+;/, `--accent-color-hover: ${hoverHsl};`);
+                finalSnippet = finalSnippet.replace(/--accent-color-focus-ring:\s*[^;]+;/, `--accent-color-focus-ring: ${focusRingHsl};`);
             }
-            setIframeSrcDoc(`<!DOCTYPE html><html class="${state.theme}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head><body style="background-color: transparent;">${finalSnippet}</body></html>`);
+             // Inject the current theme class into the iframe's html tag
+            const finalHtml = `<!DOCTYPE html><html class="${state.theme}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head><body style="background-color: transparent;">${finalSnippet}</body></html>`;
+            setIframeSrcDoc(finalHtml);
         }
     }, [generatedSnippet, themeColor, state.theme]);
 
@@ -176,27 +183,27 @@ export default function ToolGenerationModal() {
                     <label htmlFor="theme-color" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Accent Color</label>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Live preview updates instantly.</p>
                     <div className="mt-2 flex items-center gap-3 p-2 bg-slate-100 dark:bg-slate-900/50 rounded-md">
-                        <input id="theme-color" type="color" value={themeColor} onChange={(e) => setThemeColor(e.target.value)} className="w-10 h-10 p-0 border-none bg-transparent rounded cursor-pointer" aria-label="Select accent color" disabled={!generatedSnippet || modalStatus === 'loading'} />
+                        <input id="theme-color" type="color" value={themeColor} onChange={(e) => setThemeColor(e.target.value)} className="w-10 h-10 p-0 border-none bg-transparent rounded cursor-pointer" aria-label="Select accent color" disabled={!generatedSnippet || isLoading} />
                         <span className="font-mono text-sm text-slate-500">{themeColor}</span>
                     </div>
                 </Card>
 
                 <div className="space-y-3 mt-auto">
-                     <Button onClick={insertSnippet} disabled={modalStatus === 'loading' || !generatedSnippet} className="w-full" size="large">
+                     <Button onClick={insertSnippet} disabled={isLoading || !generatedSnippet} className="w-full" size="large">
                         {isInserting ? <><Spinner /> Inserting...</> : 'Insert into Post'}
                      </Button>
-                     <Button onClick={generateSnippetForModal} className="w-full" variant="secondary" disabled={modalStatus === 'loading'}>Regenerate Tool</Button>
+                     <Button onClick={generateSnippetForModal} className="w-full" variant="secondary" disabled={isLoading}>Regenerate Tool</Button>
                 </div>
             </div>
 
             <div className="lg:col-span-2 flex flex-col min-h-[45vh] lg:min-h-0">
                 <div className="flex items-center border-b border-slate-200 dark:border-slate-700">
                   <TabButton label="Code" isActive={activeTab === 'code'} onClick={() => setActiveTab('code')} icon={<CodeBracketIcon className="w-5 h-5"/>} />
-                  <TabButton label="Preview" isActive={activeTab === 'preview'} onClick={() => setActiveTab('preview')} icon={<EyeIcon className="w-5 h-5"/>} disabled={isGeneratingSnippet} />
+                  <TabButton label="Preview" isActive={activeTab === 'preview'} onClick={() => setActiveTab('preview')} icon={<EyeIcon className="w-5 h-5"/>} disabled={isStreaming} />
                 </div>
                 <div className="flex-grow bg-slate-100 dark:bg-slate-900/50 rounded-b-lg p-1 border border-t-0 border-slate-200 dark:border-slate-700">
-                    {activeTab === 'code' && (<CodeBlock code={generatedSnippet} isStreaming={isGeneratingSnippet} />)}
-                    {activeTab === 'preview' && !isGeneratingSnippet && (<iframe key={iframeSrcDoc} srcDoc={iframeSrcDoc} title="Generated Snippet Preview" className="w-full h-full border-0 rounded-md shadow-inner" sandbox="allow-scripts allow-forms"/>)}
+                    {activeTab === 'code' && (<CodeBlock code={generatedSnippet} isStreaming={isStreaming} />)}
+                    {activeTab === 'preview' && !isStreaming && (<iframe key={iframeSrcDoc} srcDoc={iframeSrcDoc} title="Generated Snippet Preview" className="w-full h-full border-0 rounded-md shadow-inner" sandbox="allow-scripts allow-forms"/>)}
                 </div>
             </div>
           </div>

@@ -1,452 +1,452 @@
-import React, { createContext, useReducer, useContext, useCallback, useMemo, useEffect } from 'react';
-import { AppState, WordPressConfig, WordPressPost, ToolIdea, AiProvider, ApiKeys, ApiValidationStatuses, ApiValidationStatus, Theme, ApiValidationErrorMessages, Status } from '../types';
-import { fetchPosts, updatePost, checkSetup, createCfTool, deleteCfTool } from '../services/wordpressService';
-import { validateApiKey, suggestToolIdeas, generateHtmlSnippetStream } from '../services/aiService';
-import { SHORTCODE_DETECTION_REGEX, SHORTCODE_REMOVAL_REGEX } from '../constants';
 
+import React, { createContext, useContext, useReducer, useEffect, ReactNode, Dispatch } from 'react';
+import { 
+    AppState, AiProvider, WordPressConfig, WordPressPost, ToolIdea, 
+    ApiKeys, ApiValidationStatuses, Status, ModalStatus, Theme 
+} from '../types';
+import * as wordpressService from '../services/wordpressService';
+import * as aiService from '../services/aiService';
+import { AI_PROVIDERS, SHORTCODE_REMOVAL_REGEX } from '../constants';
+
+// --- ACTION TYPES ---
 type Action =
-  | { type: 'RESET' }
-  | { type: 'START_LOADING'; payload?: 'posts' | 'delete' }
-  | { type: 'SET_ERROR'; payload: string }
-  | { type: 'SET_SETUP_REQUIRED'; payload: boolean }
-  | { type: 'CONFIGURE_SUCCESS'; payload: { config: WordPressConfig; posts: WordPressPost[] } }
-  | { type: 'START_DELETING_SNIPPET'; payload: number }
-  | { type: 'DELETE_SNIPPET_COMPLETE'; payload: { posts: WordPressPost[] } }
-  | { type: 'SET_POSTS'; payload: WordPressPost[] }
-  | { type: 'SET_POST_SEARCH_QUERY', payload: string }
-  | { type: 'SET_PROVIDER', payload: AiProvider }
-  | { type: 'SET_API_KEY', payload: { provider: AiProvider, key: string } }
-  | { type: 'SET_OPENROUTER_MODEL', payload: string }
-  | { type: 'SET_VALIDATION_STATUS', payload: { provider: AiProvider, status: ApiValidationStatus } }
+  | { type: 'INITIALIZE_STATE'; payload: Partial<AppState> }
   | { type: 'SET_THEME'; payload: Theme }
-  // Modal Actions
-  | { type: 'OPEN_TOOL_MODAL', payload: WordPressPost }
-  | { type: 'CLOSE_TOOL_MODAL' }
-  | { type: 'SET_MODAL_STATUS', payload: { status: Status, error?: string | null } }
+  | { type: 'SET_PROVIDER'; payload: AiProvider }
+  | { type: 'SET_API_KEY'; payload: { provider: AiProvider; key: string } }
+  | { type: 'SET_OPENROUTER_MODEL'; payload: string }
+  | { type: 'VALIDATE_API_KEY_START'; payload: AiProvider }
+  | { type: 'VALIDATE_API_KEY_SUCCESS'; payload: AiProvider }
+  | { type: 'VALIDATE_API_KEY_FAILURE'; payload: { provider: AiProvider } }
+  | { type: 'CONNECT_START' }
+  | { type: 'CONNECT_SUCCESS'; payload: { config: WordPressConfig; posts: WordPressPost[] } }
+  | { type: 'CONNECT_FAILURE'; payload: string }
+  | { type: 'SETUP_REQUIRED'; payload: WordPressConfig }
+  | { type: 'RESET' }
+  | { type: 'SET_POST_SEARCH_QUERY'; payload: string }
+  | { type: 'SET_POST_SORT_ORDER'; payload: 'opportunity' | 'date' }
+  | { type: 'DELETE_SNIPPET_START'; payload: number }
+  | { type: 'DELETE_SNIPPET_SUCCESS'; payload: WordPressPost }
+  | { type: 'DELETE_SNIPPET_FAILURE'; payload: { postId: number, error: string } }
+  | { type: 'SCORE_POSTS_START' }
+  | { type: 'SCORE_POSTS_SUCCESS'; payload: Partial<WordPressPost>[] }
+  | { type: 'SCORE_POSTS_FAILURE'; payload: string }
+  | { type: 'OPEN_MODAL'; payload: WordPressPost }
+  | { type: 'CLOSE_MODAL' }
+  | { type: 'GET_IDEAS_START' }
   | { type: 'GET_IDEAS_SUCCESS'; payload: ToolIdea[] }
+  | { type: 'GET_IDEAS_FAILURE'; payload: string }
   | { type: 'SELECT_IDEA'; payload: ToolIdea }
-  | { type: 'SET_THEME_COLOR'; payload: string }
   | { type: 'GENERATE_SNIPPET_START' }
-  | { type: 'GENERATE_SNIPPET_CHUNK'; payload: string }
-  | { type: 'GENERATE_SNIPPET_COMPLETE' }
-  | { type: 'INSERT_SNIPPET_SUCCESS' };
+  | { type: 'GENERATE_SNIPPET_STREAM'; payload: string }
+  | { type: 'GENERATE_SNIPPET_END' }
+  | { type: 'GENERATE_SNIPPET_FAILURE'; payload: string }
+  | { type: 'INSERT_SNIPPET_START' }
+  | { type: 'INSERT_SNIPPET_SUCCESS'; payload: WordPressPost }
+  | { type: 'INSERT_SNIPPET_FAILURE'; payload: string }
+  | { type: 'SET_THEME_COLOR'; payload: string };
 
-const WP_CONFIG_KEY = 'wp_config';
-const AI_CONFIG_KEY = 'ai_config';
-const THEME_KEY = 'app_theme';
+// --- CONTEXT and PROVIDER ---
+interface AppContextType {
+  state: AppState;
+  dispatch: Dispatch<Action>;
+  setTheme: (theme: Theme) => void;
+  setProvider: (provider: AiProvider) => void;
+  setApiKey: (provider: AiProvider, key: string) => void;
+  setOpenRouterModel: (model: string) => void;
+  validateAndSaveApiKey: (provider: AiProvider) => void;
+  connectToWordPress: (config: WordPressConfig) => void;
+  retryConnection: () => void;
+  reset: () => void;
+  setPostSearchQuery: (query: string) => void;
+  setPostSortOrder: (order: 'opportunity' | 'date') => void;
+  deleteSnippet: (postId: number, toolId?: number) => void;
+  runOpportunityAnalysis: () => void;
+  beginToolCreation: (post: WordPressPost) => void;
+  closeToolGenerationModal: () => void;
+  generateIdeasForModal: () => void;
+  selectIdea: (idea: ToolIdea) => void;
+  generateSnippetForModal: () => void;
+  insertSnippet: () => void;
+  setThemeColor: (color: string) => void;
+}
 
-const initialApiKeys: ApiKeys = { gemini: '', openai: '', anthropic: '', openrouter: '' };
-const initialValidationStatuses: ApiValidationStatuses = { gemini: 'idle', openai: 'idle', anthropic: 'idle', openrouter: 'idle' };
-const initialApiValidationErrorMessages: ApiValidationErrorMessages = { gemini: null, openai: null, anthropic: null, openrouter: null };
+const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const getInitialTheme = (): Theme => {
-    if (typeof window === 'undefined') return 'light';
-    const storedTheme = localStorage.getItem(THEME_KEY) as Theme | null;
-    if (storedTheme) return storedTheme;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+const filterAndSortPosts = (posts: WordPressPost[], query: string, sort: 'opportunity' | 'date'): WordPressPost[] => {
+    let filtered = posts;
+    if (query) {
+        filtered = posts.filter(p => p.title.rendered.toLowerCase().includes(query.toLowerCase()));
+    }
+    
+    const sorted = [...filtered];
+
+    if (sort === 'opportunity') {
+        sorted.sort((a, b) => (b.opportunityScore ?? -1) - (a.opportunityScore ?? -1));
+    } else {
+        // Default WP API order is reverse chronological (newest first), so no sort needed for 'date'
+    }
+    return sorted;
 };
 
+// --- INITIAL STATE ---
 const initialState: AppState = {
-  status: 'idle',
-  error: null,
-  deletingPostId: null,
-  theme: getInitialTheme(),
-  frameStatus: 'initializing',
-  // AI State
-  apiKeys: initialApiKeys,
-  apiValidationStatuses: initialValidationStatuses,
-  apiValidationErrorMessages: initialApiValidationErrorMessages,
-  selectedProvider: AiProvider.Gemini,
-  openRouterModel: '',
-  // WP State
-  wpConfig: null,
-  posts: [],
-  filteredPosts: [],
-  postSearchQuery: '',
-  setupRequired: false,
-  // Modal State
-  isToolGenerationModalOpen: false,
-  activePostForModal: null,
-  modalStatus: 'idle',
-  modalError: null,
-  toolIdeas: [],
-  selectedIdea: null,
-  generatedSnippet: '',
-  themeColor: '#3b82f6',
+    status: 'idle',
+    error: null,
+    deletingPostId: null,
+    theme: 'light',
+    frameStatus: 'initializing',
+    isScoring: false,
+    apiKeys: { [AiProvider.Gemini]: '', [AiProvider.OpenAI]: '', [AiProvider.Anthropic]: '', [AiProvider.OpenRouter]: '' },
+    apiValidationStatuses: { [AiProvider.Gemini]: 'idle', [AiProvider.OpenAI]: 'idle', [AiProvider.Anthropic]: 'idle', [AiProvider.OpenRouter]: 'idle' },
+    apiValidationErrorMessages: { [AiProvider.Gemini]: null, [AiProvider.OpenAI]: null, [AiProvider.Anthropic]: null, [AiProvider.OpenRouter]: null },
+    selectedProvider: AiProvider.Gemini,
+    openRouterModel: AI_PROVIDERS[AiProvider.OpenRouter].defaultModel,
+    wpConfig: null,
+    posts: [],
+    filteredPosts: [],
+    postSearchQuery: '',
+    postSortOrder: 'date',
+    setupRequired: false,
+    isToolGenerationModalOpen: false,
+    activePostForModal: null,
+    modalStatus: 'idle',
+    modalError: null,
+    toolIdeas: [],
+    selectedIdea: null,
+    generatedSnippet: '',
+    themeColor: '#3b82f6', // Default blue
 };
 
+// --- REDUCER ---
 const appReducer = (state: AppState, action: Action): AppState => {
   switch (action.type) {
-    case 'RESET':
-      sessionStorage.removeItem(WP_CONFIG_KEY);
-      return { ...initialState, apiKeys: state.apiKeys, apiValidationStatuses: state.apiValidationStatuses, selectedProvider: state.selectedProvider, openRouterModel: state.openRouterModel, theme: state.theme };
-    case 'START_LOADING':
-      return { ...state, status: 'loading', error: null, setupRequired: false };
-    case 'SET_ERROR':
-      return { ...state, status: 'error', error: action.payload, deletingPostId: null };
-    case 'SET_SETUP_REQUIRED':
-      return { ...state, status: 'error', setupRequired: action.payload };
-    case 'CONFIGURE_SUCCESS':
-      return {
-        ...state,
-        status: 'success',
-        wpConfig: action.payload.config,
-        posts: action.payload.posts,
-        filteredPosts: action.payload.posts,
-        setupRequired: false,
-      };
-    case 'SET_POSTS':
-      const filtered = action.payload.filter(post => post.title.rendered.toLowerCase().includes(state.postSearchQuery.toLowerCase()));
-      return { ...state, posts: action.payload, filteredPosts: filtered };
-    case 'START_DELETING_SNIPPET':
-        return { ...state, status: 'loading', deletingPostId: action.payload, error: null };
-    case 'DELETE_SNIPPET_COMPLETE':
-        const filteredAfterDelete = action.payload.posts.filter(post => post.title.rendered.toLowerCase().includes(state.postSearchQuery.toLowerCase()));
-        return {
-            ...state,
-            status: 'idle',
-            deletingPostId: null,
-            posts: action.payload.posts,
-            filteredPosts: filteredAfterDelete,
-        };
-    case 'SET_POST_SEARCH_QUERY': {
-        const query = action.payload.toLowerCase();
-        const filteredPosts = state.posts.filter(post => post.title.rendered.toLowerCase().includes(query));
-        return { ...state, postSearchQuery: action.payload, filteredPosts };
-    }
+    case 'INITIALIZE_STATE':
+        return { ...state, ...action.payload };
+    case 'SET_THEME':
+        return { ...state, theme: action.payload };
     case 'SET_PROVIDER':
         return { ...state, selectedProvider: action.payload };
     case 'SET_API_KEY':
-        return { ...state, apiKeys: { ...state.apiKeys, [action.payload.provider]: action.payload.key } };
+        const newKeys = { ...state.apiKeys, [action.payload.provider]: action.payload.key };
+        const newStatuses = { ...state.apiValidationStatuses, [action.payload.provider]: 'idle' as const };
+        return { ...state, apiKeys: newKeys, apiValidationStatuses: newStatuses };
     case 'SET_OPENROUTER_MODEL':
         return { ...state, openRouterModel: action.payload };
-    case 'SET_VALIDATION_STATUS':
-        return { ...state, apiValidationStatuses: { ...state.apiValidationStatuses, [action.payload.provider]: action.payload.status }};
-    case 'SET_THEME':
-        return { ...state, theme: action.payload };
-    // Modal Reducers
-    case 'OPEN_TOOL_MODAL':
-      return { ...state, isToolGenerationModalOpen: true, activePostForModal: action.payload };
-    case 'CLOSE_TOOL_MODAL':
-      return { ...state, isToolGenerationModalOpen: false, activePostForModal: null, toolIdeas: [], selectedIdea: null, generatedSnippet: '', modalStatus: 'idle', modalError: null };
-    case 'SET_MODAL_STATUS':
-      return { ...state, modalStatus: action.payload.status, modalError: action.payload.error || null };
+    case 'VALIDATE_API_KEY_START':
+        return { ...state, apiValidationStatuses: { ...state.apiValidationStatuses, [action.payload]: 'validating' } };
+    case 'VALIDATE_API_KEY_SUCCESS':
+        return { ...state, apiValidationStatuses: { ...state.apiValidationStatuses, [action.payload]: 'valid' } };
+    case 'VALIDATE_API_KEY_FAILURE':
+        return { ...state, apiValidationStatuses: { ...state.apiValidationStatuses, [action.payload.provider]: 'invalid' } };
+    case 'CONNECT_START':
+        return { ...state, status: 'loading', error: null, setupRequired: false };
+    case 'CONNECT_SUCCESS':
+        const initialFilteredPosts = filterAndSortPosts(action.payload.posts, state.postSearchQuery, state.postSortOrder);
+        return { ...state, status: 'success', wpConfig: action.payload.config, posts: action.payload.posts, filteredPosts: initialFilteredPosts };
+    case 'CONNECT_FAILURE':
+        return { ...state, status: 'error', error: action.payload };
+    case 'SETUP_REQUIRED':
+        return { ...state, status: 'idle', error: null, setupRequired: true, wpConfig: action.payload };
+    case 'RESET':
+        return { ...initialState, theme: state.theme }; // Keep theme on reset
+    case 'SET_POST_SEARCH_QUERY':
+        const filteredByQuery = filterAndSortPosts(state.posts, action.payload, state.postSortOrder);
+        return { ...state, postSearchQuery: action.payload, filteredPosts: filteredByQuery };
+    case 'SET_POST_SORT_ORDER':
+        const sorted = filterAndSortPosts(state.posts, state.postSearchQuery, action.payload);
+        return { ...state, postSortOrder: action.payload, filteredPosts: sorted };
+    case 'DELETE_SNIPPET_START':
+        return { ...state, deletingPostId: action.payload };
+    case 'DELETE_SNIPPET_SUCCESS':
+        const postsAfterDelete = state.posts.map(p => p.id === action.payload.id ? action.payload : p);
+        return { 
+            ...state, 
+            deletingPostId: null,
+            posts: postsAfterDelete,
+            filteredPosts: filterAndSortPosts(postsAfterDelete, state.postSearchQuery, state.postSortOrder)
+        };
+    case 'DELETE_SNIPPET_FAILURE':
+        // A more robust error handling could show a toast notification
+        console.error(`Failed to delete snippet for post ${action.payload.postId}: ${action.payload.error}`);
+        return { ...state, deletingPostId: null };
+    case 'SCORE_POSTS_START':
+        return { ...state, isScoring: true, error: null };
+    case 'SCORE_POSTS_SUCCESS':
+        const scoredPosts = state.posts.map(post => {
+            const scoreData = action.payload.find(s => s.id === post.id);
+            return scoreData ? { ...post, ...scoreData } : post;
+        });
+        return { 
+            ...state, 
+            isScoring: false,
+            posts: scoredPosts,
+            filteredPosts: filterAndSortPosts(scoredPosts, state.postSearchQuery, state.postSortOrder),
+            postSortOrder: 'opportunity' // Switch to opportunity sort after scoring
+        };
+    case 'SCORE_POSTS_FAILURE':
+        return { ...state, isScoring: false, error: action.payload };
+    case 'OPEN_MODAL':
+        return { ...state, isToolGenerationModalOpen: true, activePostForModal: action.payload };
+    case 'CLOSE_MODAL':
+        return { 
+            ...state, 
+            isToolGenerationModalOpen: false, 
+            activePostForModal: null,
+            modalStatus: 'idle',
+            modalError: null,
+            toolIdeas: [],
+            selectedIdea: null,
+            generatedSnippet: ''
+        };
+    case 'GET_IDEAS_START':
+        return { ...state, modalStatus: 'loading_ideas', modalError: null, toolIdeas: [] };
     case 'GET_IDEAS_SUCCESS':
-      return { ...state, modalStatus: 'idle', toolIdeas: action.payload };
+        return { ...state, modalStatus: 'idle', toolIdeas: action.payload };
+    case 'GET_IDEAS_FAILURE':
+        return { ...state, modalStatus: 'error', modalError: action.payload };
     case 'SELECT_IDEA':
-      return { ...state, selectedIdea: action.payload };
-    case 'SET_THEME_COLOR':
-      return { ...state, themeColor: action.payload };
+        return { ...state, selectedIdea: action.payload };
     case 'GENERATE_SNIPPET_START':
-      return { ...state, modalStatus: 'loading', generatedSnippet: '', modalError: null };
-    case 'GENERATE_SNIPPET_CHUNK':
-      return { ...state, generatedSnippet: state.generatedSnippet + action.payload };
-    case 'GENERATE_SNIPPET_COMPLETE':
-      return { ...state, modalStatus: 'idle' };
+        return { ...state, modalStatus: 'generating_snippet', generatedSnippet: '', modalError: null };
+    case 'GENERATE_SNIPPET_STREAM':
+        return { ...state, generatedSnippet: state.generatedSnippet + action.payload };
+    case 'GENERATE_SNIPPET_END':
+        return { ...state, modalStatus: 'idle' };
+    case 'GENERATE_SNIPPET_FAILURE':
+        return { ...state, modalStatus: 'error', modalError: action.payload };
+    case 'INSERT_SNIPPET_START':
+        return { ...state, modalStatus: 'inserting_snippet' };
     case 'INSERT_SNIPPET_SUCCESS':
-        return { ...state, modalStatus: 'success' };
+         const postsAfterInsert = state.posts.map(p => p.id === action.payload.id ? action.payload : p);
+        return { 
+            ...state, 
+            modalStatus: 'success',
+            posts: postsAfterInsert,
+            filteredPosts: filterAndSortPosts(postsAfterInsert, state.postSearchQuery, state.postSortOrder)
+        };
+    case 'INSERT_SNIPPET_FAILURE':
+        return { ...state, modalStatus: 'error', modalError: action.payload };
+    case 'SET_THEME_COLOR':
+        return { ...state, themeColor: action.payload };
     default:
       return state;
   }
 };
 
-const AppContext = createContext<{
-  state: AppState;
-  connectToWordPress: (config: WordPressConfig) => Promise<void>;
-  retryConnection: () => Promise<void>;
-  reset: () => void;
-  setTheme: (theme: Theme) => void;
-  // Provider/API Key Management
-  setProvider: (provider: AiProvider) => void;
-  setApiKey: (provider: AiProvider, key: string) => void;
-  setOpenRouterModel: (model: string) => void;
-  validateAndSaveApiKey: (provider: AiProvider) => Promise<void>;
-  // Post Dashboard Actions
-  setPostSearchQuery: (query: string) => void;
-  deleteSnippet: (postId: number, toolId?: number) => Promise<void>;
-  // Tool Generation Modal Actions
-  beginToolCreation: (post: WordPressPost) => void;
-  closeToolGenerationModal: () => void;
-  generateIdeasForModal: () => Promise<void>;
-  selectIdea: (idea: ToolIdea) => void;
-  generateSnippetForModal: () => Promise<void>;
-  insertSnippet: () => Promise<void>;
-  setThemeColor: (color: string) => void;
+// --- PROVIDER COMPONENT ---
+export const AppContextProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+    const [state, dispatch] = useReducer(appReducer, initialState);
 
-} | null>(null);
+    useEffect(() => {
+        // Load persisted state from localStorage
+        const persistedState: Partial<AppState> = {};
+        const storedKeys = localStorage.getItem('apiKeys');
+        const storedConfig = localStorage.getItem('wpConfig');
+        const storedTheme = localStorage.getItem('theme') as Theme;
 
-export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [state, dispatch] = useReducer(appReducer, initialState, (init) => {
-    try {
-      const cachedAiConfig = localStorage.getItem(AI_CONFIG_KEY);
-      const aiConfig = cachedAiConfig ? JSON.parse(cachedAiConfig) : {};
-      const cachedWpConfig = sessionStorage.getItem(WP_CONFIG_KEY);
-      
-      let wpState = {};
-      if (cachedWpConfig) {
-        wpState = { wpConfig: JSON.parse(cachedWpConfig) };
-      }
-       return {
-          ...init,
-          ...wpState,
-          apiKeys: { ...initialApiKeys, ...aiConfig.apiKeys },
-          selectedProvider: aiConfig.selectedProvider || AiProvider.Gemini,
-          openRouterModel: aiConfig.openRouterModel || '',
-          theme: getInitialTheme(),
-        };
-    } catch (e) {
-      console.error("Failed to load state from storage", e);
-      return { ...init, theme: getInitialTheme() };
-    }
-  });
-  
-  // Effect to apply theme class to the root element
-  useEffect(() => {
-    const root = window.document.documentElement;
-    root.classList.remove('light', 'dark');
-    root.classList.add(state.theme);
-    localStorage.setItem(THEME_KEY, state.theme);
-  }, [state.theme]);
-  
-  // Effect to fetch posts if config exists on load
-  useEffect(() => {
-    const fetchInitialPosts = async () => {
-      if (state.wpConfig) {
-        dispatch({ type: 'START_LOADING' });
-        try {
-          const posts = await fetchPosts(state.wpConfig);
-          dispatch({ type: 'SET_POSTS', payload: posts });
-          dispatch({ type: 'SET_MODAL_STATUS', payload: { status: 'idle' } });
-        } catch(err) {
-          dispatch({ type: 'SET_ERROR', payload: err instanceof Error ? err.message : 'Failed to fetch posts' });
+        if (storedKeys) persistedState.apiKeys = JSON.parse(storedKeys);
+        if (storedConfig) persistedState.wpConfig = JSON.parse(storedConfig);
+        if (storedTheme) persistedState.theme = storedTheme;
+        else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            persistedState.theme = 'dark';
         }
-      }
+        dispatch({ type: 'INITIALIZE_STATE', payload: persistedState });
+    }, []);
+
+    useEffect(() => {
+        // Persist theme
+        if (state.theme === 'dark') {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+        localStorage.setItem('theme', state.theme);
+    }, [state.theme]);
+    
+    // --- ACTION DISPATCHERS ---
+    const setTheme = (theme: Theme) => dispatch({ type: 'SET_THEME', payload: theme });
+    const setProvider = (provider: AiProvider) => dispatch({ type: 'SET_PROVIDER', payload: provider });
+    const setApiKey = (provider: AiProvider, key: string) => dispatch({ type: 'SET_API_KEY', payload: { provider, key } });
+    const setOpenRouterModel = (model: string) => dispatch({ type: 'SET_OPENROUTER_MODEL', payload: model });
+    const setPostSearchQuery = (query: string) => dispatch({ type: 'SET_POST_SEARCH_QUERY', payload: query });
+    const setPostSortOrder = (order: 'opportunity' | 'date') => dispatch({ type: 'SET_POST_SORT_ORDER', payload: order });
+    const beginToolCreation = (post: WordPressPost) => dispatch({ type: 'OPEN_MODAL', payload: post });
+    const closeToolGenerationModal = () => dispatch({ type: 'CLOSE_MODAL' });
+    const selectIdea = (idea: ToolIdea) => dispatch({ type: 'SELECT_IDEA', payload: idea });
+    const setThemeColor = (color: string) => dispatch({ type: 'SET_THEME_COLOR', payload: color });
+
+    const validateAndSaveApiKey = async (provider: AiProvider) => {
+        dispatch({ type: 'VALIDATE_API_KEY_START', payload: provider });
+        const key = state.apiKeys[provider];
+        const model = provider === AiProvider.OpenRouter ? state.openRouterModel : AI_PROVIDERS[provider].defaultModel;
+
+        const isValid = await aiService.validateApiKey(provider, key, model);
+
+        if (isValid) {
+            localStorage.setItem('apiKeys', JSON.stringify(state.apiKeys));
+            dispatch({ type: 'VALIDATE_API_KEY_SUCCESS', payload: provider });
+        } else {
+            dispatch({ type: 'VALIDATE_API_KEY_FAILURE', payload: { provider } });
+        }
     };
-    fetchInitialPosts();
-  }, [state.wpConfig?.url]); // refetch if url changes
-
-  const reset = useCallback(() => dispatch({ type: 'RESET' }), []);
-  
-  const connectToWordPress = useCallback(async (config: WordPressConfig) => {
-    dispatch({ type: 'START_LOADING' });
-    try {
-      const isSetup = await checkSetup(config);
-      if (!isSetup) {
-        dispatch({ type: 'SET_SETUP_REQUIRED', payload: true });
-        dispatch({ type: 'SET_ERROR', payload: 'A one-time setup is required.' });
-        sessionStorage.setItem(WP_CONFIG_KEY, JSON.stringify(config)); 
-        return;
-      }
-
-      const posts = await fetchPosts(config);
-      sessionStorage.setItem(WP_CONFIG_KEY, JSON.stringify(config));
-      dispatch({ type: 'CONFIGURE_SUCCESS', payload: { config, posts } });
-    } catch (err) {
-      dispatch({ type: 'SET_ERROR', payload: err instanceof Error ? err.message : 'An unknown error occurred' });
-    }
-  }, []);
-
-  const retryConnection = useCallback(async () => {
-    const cachedConfig = sessionStorage.getItem(WP_CONFIG_KEY);
-    if (cachedConfig) {
-      const config = JSON.parse(cachedConfig);
-      if (config.url && config.username && config.appPassword) {
-        await connectToWordPress(config);
-      } else {
-        dispatch({ type: 'SET_ERROR', payload: 'Cached credentials incomplete. Please re-enter.' });
-        dispatch({ type: 'SET_SETUP_REQUIRED', payload: false });
-      }
-    } else {
-      dispatch({ type: 'SET_ERROR', payload: 'No connection details to retry. Please start over.' });
-      dispatch({ type: 'RESET' });
-    }
-  }, [connectToWordPress]);
-  
-  const deleteSnippet = useCallback(async (postId: number, toolId?: number) => {
-    if (!state.wpConfig) return;
-    const postToDeleteFrom = state.posts.find(p => p.id === postId);
-    if (!postToDeleteFrom) return;
-    dispatch({ type: 'START_DELETING_SNIPPET', payload: postId });
-    try {
-        if (!SHORTCODE_DETECTION_REGEX.test(postToDeleteFrom.content.rendered)) {
-             throw new Error("Tool shortcode not found in post content.");
+    
+    const connectToWordPress = async (config: WordPressConfig) => {
+        dispatch({ type: 'CONNECT_START' });
+        try {
+            const isSetup = await wordpressService.checkSetup(config);
+            if (!isSetup) {
+                dispatch({ type: 'SETUP_REQUIRED', payload: config });
+                return;
+            }
+            const posts = await wordpressService.fetchPosts(config);
+            localStorage.setItem('wpConfig', JSON.stringify(config));
+            dispatch({ type: 'CONNECT_SUCCESS', payload: { config, posts } });
+        } catch (error: any) {
+            dispatch({ type: 'CONNECT_FAILURE', payload: error.message || 'An unknown error occurred.' });
         }
-        
-        // --- FLAWLESS DELETION Overhaul ---
-        // This multi-pass process ensures a perfectly clean removal,
-        // preventing any leftover empty tags or whitespace that could distort post formatting.
+    };
 
-        // Pass 1: Remove all instances of the shortcode itself from the content.
-        let newContent = postToDeleteFrom.content.rendered.replace(SHORTCODE_REMOVAL_REGEX, '');
-
-        // Pass 2: Clean up any <p> tags that are now empty or contain only whitespace (including &nbsp;).
-        // This is crucial for fixing formatting issues caused by WordPress's wpautop filter.
-        const emptyParagraphRegex = /<p[^>]*>(\s|&nbsp;)*<\/p>/gi;
-        newContent = newContent.replace(emptyParagraphRegex, '');
-
-        await updatePost(state.wpConfig, postId, newContent.trim());
-        if (toolId) {
-            await deleteCfTool(state.wpConfig, toolId);
+    const retryConnection = () => {
+        if (state.wpConfig) {
+            connectToWordPress(state.wpConfig);
         }
-        const newPosts = await fetchPosts(state.wpConfig);
-        dispatch({ type: 'DELETE_SNIPPET_COMPLETE', payload: { posts: newPosts } });
-    } catch (err) {
-      dispatch({ type: 'SET_ERROR', payload: err instanceof Error ? err.message : 'Failed to delete snippet' });
-    }
-  }, [state.wpConfig, state.posts]);
+    };
 
-  // --- MODAL ACTIONS ---
-  const beginToolCreation = useCallback((post: WordPressPost) => {
-    dispatch({ type: 'OPEN_TOOL_MODAL', payload: post });
-  }, []);
-  
-  const closeToolGenerationModal = useCallback(() => {
-    dispatch({ type: 'CLOSE_TOOL_MODAL' });
-  }, []);
+    const reset = () => {
+        localStorage.removeItem('wpConfig');
+        localStorage.removeItem('apiKeys');
+        dispatch({ type: 'RESET' });
+    };
 
-  const generateIdeasForModal = useCallback(async () => {
-    if (!state.activePostForModal) return;
-    dispatch({ type: 'SET_MODAL_STATUS', payload: { status: 'loading' } });
-    try {
-      const { title, content } = state.activePostForModal;
-      const ideas = await suggestToolIdeas(state, title.rendered, content.rendered);
-      dispatch({ type: 'GET_IDEAS_SUCCESS', payload: ideas });
-    } catch (err) {
-      dispatch({ type: 'SET_MODAL_STATUS', payload: { status: 'error', error: err instanceof Error ? err.message : 'Failed to generate ideas' } });
-    }
-  }, [state]);
-  
-  const selectIdea = useCallback((idea: ToolIdea) => dispatch({ type: 'SELECT_IDEA', payload: idea }), []);
+    const deleteSnippet = async (postId: number, toolId?: number) => {
+        if (!state.wpConfig) return;
+        dispatch({ type: 'DELETE_SNIPPET_START', payload: postId });
+        try {
+            if (toolId) {
+                await wordpressService.deleteCfTool(state.wpConfig, toolId);
+            }
+            const post = state.posts.find(p => p.id === postId);
+            if (!post) throw new Error("Post not found");
+            const newContent = post.content.rendered.replace(SHORTCODE_REMOVAL_REGEX, '');
+            const updatedPost = await wordpressService.updatePost(state.wpConfig, postId, newContent);
+            // Re-fetch post details to ensure it's up-to-date.
+             const freshPostDetails: WordPressPost = { ...post, ...updatedPost, hasOptimizerSnippet: false, toolId: undefined, opportunityScore: undefined, toolCreationDate: undefined };
+            dispatch({ type: 'DELETE_SNIPPET_SUCCESS', payload: freshPostDetails });
+        } catch (error: any) {
+            dispatch({ type: 'DELETE_SNIPPET_FAILURE', payload: { postId, error: error.message } });
+        }
+    };
+    
+    const runOpportunityAnalysis = async () => {
+        const { selectedProvider, apiKeys, openRouterModel, posts } = state;
+        const apiKey = apiKeys[selectedProvider];
+        if (!apiKey || posts.length === 0) return;
+        dispatch({ type: 'SCORE_POSTS_START' });
+        try {
+            const model = selectedProvider === AiProvider.OpenRouter ? openRouterModel : AI_PROVIDERS[selectedProvider].defaultModel;
+            const scores = await aiService.getOpportunityScores(apiKey, selectedProvider, model, posts);
+            dispatch({ type: 'SCORE_POSTS_SUCCESS', payload: scores });
+        } catch (error: any) {
+            dispatch({ type: 'SCORE_POSTS_FAILURE', payload: error.message || 'Failed to score posts.' });
+        }
+    };
 
-  const generateSnippetForModal = useCallback(async () => {
-    if (!state.activePostForModal || !state.selectedIdea) return;
-    dispatch({ type: 'GENERATE_SNIPPET_START' });
-    try {
-      const { title, content } = state.activePostForModal;
-      const stream = generateHtmlSnippetStream(state, title.rendered, content.rendered, state.selectedIdea, state.themeColor);
-      for await (const chunk of stream) {
-        dispatch({ type: 'GENERATE_SNIPPET_CHUNK', payload: chunk });
-      }
-    } catch (err) {
-      dispatch({ type: 'SET_MODAL_STATUS', payload: { status: 'error', error: err instanceof Error ? err.message : 'Failed to generate snippet' } });
-    } finally {
-      dispatch({ type: 'GENERATE_SNIPPET_COMPLETE' });
-    }
-  }, [state]);
+    const generateIdeasForModal = async () => {
+        const { selectedProvider, apiKeys, openRouterModel, activePostForModal } = state;
+        if (!activePostForModal) return;
+        const apiKey = apiKeys[selectedProvider];
+        dispatch({ type: 'GET_IDEAS_START' });
+        try {
+             const model = selectedProvider === AiProvider.OpenRouter ? openRouterModel : AI_PROVIDERS[selectedProvider].defaultModel;
+             const ideas = await aiService.generateToolIdeas(apiKey, selectedProvider, model, activePostForModal);
+             dispatch({ type: 'GET_IDEAS_SUCCESS', payload: ideas });
+        } catch (error: any) {
+             dispatch({ type: 'GET_IDEAS_FAILURE', payload: error.message || 'Failed to generate ideas.' });
+        }
+    };
 
-  const insertSnippet = useCallback(async () => {
-    if (!state.wpConfig || !state.activePostForModal || !state.generatedSnippet || !state.selectedIdea) return;
-    dispatch({ type: 'SET_MODAL_STATUS', payload: { status: 'loading' } });
-    try {
-      const { id: newToolId } = await createCfTool(state.wpConfig, state.selectedIdea.title, state.generatedSnippet);
-      const shortcode = `[contentforge_tool id="${newToolId}"]`;
-      
-      // --- NEW "Safe-Insert" Logic ---
-      // This deterministic method prevents formatting distortion by placing the tool
-      // predictably after the first paragraph, ensuring it's treated as a distinct block.
-      const postContent = state.activePostForModal.content.rendered;
-      const trimmedContent = postContent.trim();
-      const match = /<\/p>/i.exec(trimmedContent);
-      let newContent;
+    const generateSnippetForModal = async () => {
+        const { selectedProvider, apiKeys, openRouterModel, activePostForModal, selectedIdea } = state;
+        if (!activePostForModal || !selectedIdea) return;
+        const apiKey = apiKeys[selectedProvider];
+        dispatch({ type: 'GENERATE_SNIPPET_START' });
+        try {
+            const model = selectedProvider === AiProvider.OpenRouter ? openRouterModel : AI_PROVIDERS[selectedProvider].defaultModel;
+            const stream = await aiService.generateSnippet(apiKey, selectedProvider, model, activePostForModal, selectedIdea);
+            for await (const chunk of stream) {
+                dispatch({ type: 'GENERATE_SNIPPET_STREAM', payload: chunk });
+            }
+            dispatch({ type: 'GENERATE_SNIPPET_END' });
+        } catch (error: any) {
+            dispatch({ type: 'GENERATE_SNIPPET_FAILURE', payload: error.message || 'Failed to generate snippet.' });
+        }
+    };
 
-      if (match) {
-        // Insert after the first closing paragraph tag.
-        const insertionPoint = match.index + match[0].length;
-        const contentBefore = trimmedContent.substring(0, insertionPoint);
-        const contentAfter = trimmedContent.substring(insertionPoint);
-        // Add newlines to help WordPress's wpautop treat it as a distinct block element.
-        newContent = `${contentBefore}\n\n${shortcode}\n\n${contentAfter}`;
-      } else {
-        // Fallback: If no <p> tag is found, safely append the shortcode. Prepending can
-        // disrupt layouts that start with headings, images, or custom blocks.
-        newContent = `${trimmedContent}\n\n${shortcode}`;
-      }
-      
-      await updatePost(state.wpConfig, state.activePostForModal.id, newContent);
-      
-      const newPosts = await fetchPosts(state.wpConfig);
-      dispatch({ type: 'SET_POSTS', payload: newPosts });
-      dispatch({ type: 'INSERT_SNIPPET_SUCCESS' });
-    } catch (err) {
-      dispatch({ type: 'SET_MODAL_STATUS', payload: { status: 'error', error: err instanceof Error ? err.message : 'Failed to insert snippet' } });
-    }
-  }, [state]);
+    const insertSnippet = async () => {
+        const { wpConfig, activePostForModal, generatedSnippet, selectedIdea } = state;
+        if (!wpConfig || !activePostForModal || !generatedSnippet || !selectedIdea) return;
+        dispatch({ type: 'INSERT_SNIPPET_START' });
+        try {
+            const tool = await wordpressService.createCfTool(wpConfig, selectedIdea.title, generatedSnippet);
+            const shortcode = `[contentforge_tool id="${tool.id}"]`;
+            // Intelligent placement: insert after first h2 or at the top if no h2
+            const content = activePostForModal.content.rendered;
+            const h2Match = /<\/h2>/i.exec(content);
+            let newContent = '';
+            if (h2Match) {
+                const insertIndex = h2Match.index + 5;
+                newContent = content.slice(0, insertIndex) + `<p>${shortcode}</p>` + content.slice(insertIndex);
+            } else {
+                newContent = `<p>${shortcode}</p>` + content;
+            }
+            const updatedPost = await wordpressService.updatePost(wpConfig, activePostForModal.id, newContent);
+            
+            const finalPost: WordPressPost = {
+                ...activePostForModal,
+                ...updatedPost,
+                hasOptimizerSnippet: true,
+                toolId: tool.id,
+                toolCreationDate: Date.now()
+            };
 
-  const setThemeColor = useCallback((color: string) => dispatch({ type: 'SET_THEME_COLOR', payload: color }), []);
-  const setPostSearchQuery = useCallback((query: string) => dispatch({ type: 'SET_POST_SEARCH_QUERY', payload: query }), []);
-  const setProvider = useCallback((provider: AiProvider) => dispatch({type: 'SET_PROVIDER', payload: provider}), []);
-  const setApiKey = useCallback((provider: AiProvider, key: string) => {
-      dispatch({type: 'SET_API_KEY', payload: { provider, key }});
-      if (state.apiValidationStatuses[provider] === 'valid') {
-          dispatch({type: 'SET_VALIDATION_STATUS', payload: { provider, status: 'idle' }});
-      }
-  }, [state.apiValidationStatuses]);
-  const setOpenRouterModel = useCallback((model: string) => dispatch({type: 'SET_OPENROUTER_MODEL', payload: model}), []);
-  const saveAiConfigToLocalStorage = useCallback(() => {
-    localStorage.setItem(AI_CONFIG_KEY, JSON.stringify({
-        apiKeys: state.apiKeys,
-        selectedProvider: state.selectedProvider,
-        openRouterModel: state.openRouterModel,
-    }));
-  }, [state.apiKeys, state.selectedProvider, state.openRouterModel]);
-  const validateAndSaveApiKey = useCallback(async (provider: AiProvider) => {
-    dispatch({ type: 'SET_VALIDATION_STATUS', payload: { provider, status: 'validating' } });
-    const isValid = await validateApiKey(provider, state.apiKeys[provider], state.openRouterModel);
-    dispatch({ type: 'SET_VALIDATION_STATUS', payload: { provider, status: isValid ? 'valid' : 'invalid' } });
-    if (isValid) saveAiConfigToLocalStorage();
-  }, [state.apiKeys, state.openRouterModel, saveAiConfigToLocalStorage]);
-  const setTheme = useCallback((theme: Theme) => dispatch({ type: 'SET_THEME', payload: theme }), []);
-  
-  useEffect(() => {
-    saveAiConfigToLocalStorage();
-  }, [state.apiKeys, state.selectedProvider, state.openRouterModel, saveAiConfigToLocalStorage]);
+            dispatch({ type: 'INSERT_SNIPPET_SUCCESS', payload: finalPost });
+        } catch (error: any) {
+            dispatch({ type: 'INSERT_SNIPPET_FAILURE', payload: error.message || 'Failed to insert snippet.' });
+        }
+    };
 
-  const value = useMemo(() => ({
-    state,
-    connectToWordPress,
-    retryConnection,
-    reset,
-    setTheme,
-    setProvider,
-    setApiKey,
-    setOpenRouterModel,
-    validateAndSaveApiKey,
-    setPostSearchQuery,
-    deleteSnippet,
-    beginToolCreation,
-    closeToolGenerationModal,
-    generateIdeasForModal,
-    selectIdea,
-    generateSnippetForModal,
-    insertSnippet,
-    setThemeColor,
-  }), [
-    state, 
-    connectToWordPress, 
-    retryConnection,
-    reset,
-    setTheme,
-    setProvider,
-    setApiKey,
-    setOpenRouterModel,
-    validateAndSaveApiKey,
-    setPostSearchQuery,
-    deleteSnippet,
-    beginToolCreation,
-    closeToolGenerationModal,
-    generateIdeasForModal,
-    selectIdea,
-    generateSnippetForModal,
-    insertSnippet,
-    setThemeColor
-  ]);
+    const value = {
+        state,
+        dispatch,
+        setTheme,
+        setProvider,
+        setApiKey,
+        setOpenRouterModel,
+        validateAndSaveApiKey,
+        connectToWordPress,
+        retryConnection,
+        reset,
+        setPostSearchQuery,
+        setPostSortOrder,
+        deleteSnippet,
+        runOpportunityAnalysis,
+        beginToolCreation,
+        closeToolGenerationModal,
+        generateIdeasForModal,
+        selectIdea,
+        generateSnippetForModal,
+        insertSnippet,
+        setThemeColor
+    };
 
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+    return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };
 
-export const useAppContext = () => {
+// --- HOOK ---
+export const useAppContext = (): AppContextType => {
   const context = useContext(AppContext);
-  if (!context) {
+  if (context === undefined) {
     throw new Error('useAppContext must be used within an AppContextProvider');
   }
   return context;

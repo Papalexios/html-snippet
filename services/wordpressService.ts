@@ -164,12 +164,21 @@ export async function createCfTool(config: WordPressConfig, title: string, conte
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`Failed to create tool post. Status: ${response.status} - ${errorData.message}`);
+      let errorMessage = `Failed to create tool post. Status: ${response.status}`;
+      try {
+        const errorData = await response.json();
+        errorMessage += ` - ${errorData.message || 'Unknown WordPress error.'}`;
+      } catch (e) {
+        errorMessage += ` - Could not parse error response from server.`;
+      }
+      throw new Error(errorMessage);
     }
     return await response.json();
   } catch (error) {
     console.error('Create cf_tool error:', error);
+    if (error instanceof TypeError) {
+        throw new Error('A network error occurred while creating the tool. This could be a CORS issue or a problem connecting to your site.');
+    }
     throw error;
   }
 }
@@ -192,12 +201,21 @@ export async function deleteCfTool(config: WordPressConfig, toolId: number): Pro
             console.warn(`Tool with ID ${toolId} not found for deletion. It might have been deleted manually.`);
             return;
         }
-      const errorData = await response.json();
-      throw new Error(`Failed to delete tool post. Status: ${response.status} - ${errorData.message}`);
+      let errorMessage = `Failed to delete tool post. Status: ${response.status}`;
+      try {
+        const errorData = await response.json();
+        errorMessage += ` - ${errorData.message || 'Unknown WordPress error.'}`;
+      } catch (e) {
+        errorMessage += ` - Could not parse error response from server.`;
+      }
+      throw new Error(errorMessage);
     }
     // No content on successful deletion
   } catch (error) {
     console.error('Delete cf_tool error:', error);
+    if (error instanceof TypeError) {
+        throw new Error('A network error occurred while deleting the tool. This could be a CORS issue or a problem connecting to your site.');
+    }
     throw error;
   }
 }

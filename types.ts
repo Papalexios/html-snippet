@@ -1,4 +1,5 @@
 export type Status = 'idle' | 'loading' | 'error' | 'success';
+export type ModalStatus = 'idle' | 'loading_ideas' | 'generating_snippet' | 'inserting_snippet' | 'error' | 'success';
 
 export enum AiProvider {
   Gemini = 'gemini',
@@ -49,6 +50,9 @@ export interface WordPressPost {
   featuredImageUrl: string | null;
   hasOptimizerSnippet: boolean;
   toolId?: number; // The ID of the cf_tool custom post
+  opportunityScore?: number;
+  opportunityRationale?: string;
+  toolCreationDate?: number; // Stored as a Unix timestamp
 }
 
 export interface ToolIdea {
@@ -67,6 +71,7 @@ export interface AppState {
   deletingPostId: number | null;
   theme: Theme;
   frameStatus: FrameStatus;
+  isScoring: boolean;
   
   // AI Provider State
   apiKeys: ApiKeys;
@@ -80,12 +85,13 @@ export interface AppState {
   posts: WordPressPost[];
   filteredPosts: WordPressPost[];
   postSearchQuery: string;
+  postSortOrder: 'opportunity' | 'date';
   setupRequired: boolean; // Flag to indicate if the PHP snippet setup is needed
 
   // Tool Generation Modal State
   isToolGenerationModalOpen: boolean;
   activePostForModal: WordPressPost | null; // The post being edited
-  modalStatus: Status; // Status specific to the modal's async operations
+  modalStatus: ModalStatus; // Status specific to the modal's async operations
   modalError: string | null;
   toolIdeas: ToolIdea[];
   selectedIdea: ToolIdea | null;
