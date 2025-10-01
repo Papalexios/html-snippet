@@ -1,5 +1,4 @@
 export type Status = 'idle' | 'loading' | 'error' | 'success';
-export type ModalStatus = 'idle' | 'loading_ideas' | 'generating_snippet' | 'inserting_snippet' | 'error' | 'success';
 
 export enum AiProvider {
   Gemini = 'gemini',
@@ -45,14 +44,12 @@ export interface WordPressPost {
   };
   content: {
     rendered: string;
+    raw?: string; // Raw content from DB, available in 'edit' context for robust shortcode detection
   };
   link: string;
   featuredImageUrl: string | null;
   hasOptimizerSnippet: boolean;
   toolId?: number; // The ID of the cf_tool custom post
-  opportunityScore?: number;
-  opportunityRationale?: string;
-  toolCreationDate?: number; // Stored as a Unix timestamp
 }
 
 export interface ToolIdea {
@@ -65,13 +62,23 @@ export type Theme = 'light' | 'dark';
 
 export type FrameStatus = 'initializing' | 'ready' | 'failed';
 
+export type Placement = 'ai' | 'end' | 'manual';
+
+export type PostFilter = 'all' | 'with-quiz' | 'without-quiz';
+
+export interface QuizAnalyticsData {
+  completions: number;
+  averageScore: number; // as a percentage
+  resultCounts: Record<string, number>;
+}
+
+
 export interface AppState {
   status: Status; // For general app status like fetching posts
   error: string | null;
   deletingPostId: number | null;
   theme: Theme;
   frameStatus: FrameStatus;
-  isScoring: boolean;
   
   // AI Provider State
   apiKeys: ApiKeys;
@@ -85,16 +92,21 @@ export interface AppState {
   posts: WordPressPost[];
   filteredPosts: WordPressPost[];
   postSearchQuery: string;
-  postSortOrder: 'opportunity' | 'date';
+  postFilter: PostFilter;
   setupRequired: boolean; // Flag to indicate if the PHP snippet setup is needed
 
   // Tool Generation Modal State
   isToolGenerationModalOpen: boolean;
   activePostForModal: WordPressPost | null; // The post being edited
-  modalStatus: ModalStatus; // Status specific to the modal's async operations
+  modalStatus: Status; // Status specific to the modal's async operations
   modalError: string | null;
   toolIdeas: ToolIdea[];
   selectedIdea: ToolIdea | null;
   generatedSnippet: string;
   themeColor: string;
+  manualShortcode: string | null;
+
+  // Analytics Modal State
+  isAnalyticsModalOpen: boolean;
+  activeToolIdForAnalytics: number | null;
 }

@@ -6,6 +6,7 @@ import { Button } from './components/common/Button';
 import { SparklesIcon } from './components/icons/SparklesIcon';
 import ThemeToggle from './components/ThemeToggle';
 import ToolGenerationModal from './components/ToolGenerationModal';
+import QuizAnalyticsModal from './components/QuizAnalyticsModal';
 
 export default function App(): React.ReactNode {
   const { state, reset } = useAppContext();
@@ -19,7 +20,7 @@ export default function App(): React.ReactNode {
             <SparklesIcon className="w-10 h-10 sm:w-12 sm:h-12 text-blue-500" />
             <div className="text-center sm:text-left">
               <h1 className="text-2xl sm:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-purple-600 dark:from-blue-400 dark:to-purple-500">
-                HTML Snippet AI
+                QuizForge AI
               </h1>
               <p className="text-sm sm:text-base text-slate-500 dark:text-slate-400">
                 From the creators of <a href="https://affiliatemarketingforsuccess.com" target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-600 dark:text-blue-400 hover:underline">AffiliateMarketingForSuccess.com</a>
@@ -38,10 +39,10 @@ export default function App(): React.ReactNode {
           <>
             <div className="text-center my-8 animate-fade-in">
               <h2 className="text-3xl sm:text-5xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight leading-tight">
-                Beyond Words: AI Tools That Win Readers & Rankings.
+                Turn Readers into Participants.
               </h2>
               <p className="mt-4 max-w-3xl mx-auto text-lg sm:text-xl text-slate-600 dark:text-slate-400">
-                Generate bespoke HTML tools from your content. Captivate readers, boost engagement, and earn the rankings you deserve.
+                Automatically generate interactive quizzes from your content. Captivate your audience, boost engagement, and increase time-on-page.
               </p>
             </div>
 
@@ -64,10 +65,11 @@ export default function App(): React.ReactNode {
         </main>
         
         <ToolGenerationModal />
+        <QuizAnalyticsModal />
 
         <footer className="text-center mt-8 sm:mt-12 py-6 border-t border-slate-200/50 dark:border-slate-800/50">
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            © {new Date().getFullYear()} HTML Snippet AI by <a href="https://affiliatemarketingforsuccess.com" target="_blank" rel="noopener noreferrer" className="hover:underline">AffiliateMarketingForSuccess.com</a>
+            © {new Date().getFullYear()} QuizForge AI by <a href="https://affiliatemarketingforsuccess.com" target="_blank" rel="noopener noreferrer" className="hover:underline">AffiliateMarketingForSuccess.com</a>
           </p>
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-2 space-x-2">
             <a href="https://affiliatemarketingforsuccess.com/blog/" target="_blank" rel="noopener noreferrer" className="hover:underline">Blog</a>

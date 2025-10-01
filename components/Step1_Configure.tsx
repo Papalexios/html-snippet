@@ -137,14 +137,14 @@ export default function Step1Configure(): React.ReactNode {
        {/* Unique Features */}
       <section className="text-center">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
-           <FeatureCard icon={<LightbulbIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />} title="Elite AI Idea Engine">
-              Our AI analyzes your posts to suggest context-aware tools that competitors can't replicate, turning static content into interactive assets.
+           <FeatureCard icon={<LightbulbIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />} title="AI-Powered Quiz Generation">
+              Our AI analyzes your posts to suggest and create context-aware quizzes, turning static content into interactive experiences.
            </FeatureCard>
-           <FeatureCard icon={<CodeBracketIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />} title="Masterpiece Code">
-              Receive production-ready, fully responsive, and accessible HTML snippets built to the highest industry standards, complete with perfect dark mode.
+           <FeatureCard icon={<CodeBracketIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />} title="Interactive & Engaging">
+              Receive production-ready, fully responsive, and accessible quizzes that look amazing in light and dark mode.
            </FeatureCard>
-           <FeatureCard icon={<CheckIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />} title="1-Click WordPress Insertion">
-             Our intelligent placement engine analyzes your content and surgically injects the tool for maximum impact with a single click.
+           <FeatureCard icon={<CheckIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />} title="Intelligent 1-Click Insertion">
+             Our placement engine analyzes your content and injects the quiz for maximum impact with a single click.
            </FeatureCard>
         </div>
       </section>
@@ -157,13 +157,13 @@ export default function Step1Configure(): React.ReactNode {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl mx-auto">
           <Card className="!p-5 bg-white dark:bg-slate-800/80">
             <blockquote className="text-slate-600 dark:text-slate-300">
-              <p>"This is a quantum leap for content creators. I added a custom ROI calculator to a finance post, and my average time-on-page tripled. The quality of the generated code is simply breathtaking."</p>
+              <p>"This is a quantum leap for content creators. I added a custom quiz to a finance post, and my average time-on-page tripled. The quality of the generated quiz is simply breathtaking."</p>
               <footer className="mt-3 text-sm font-semibold text-slate-800 dark:text-slate-100">- Sarah J., Niche Site Owner</footer>
             </blockquote>
           </Card>
           <Card className="!p-5 bg-white dark:bg-slate-800/80">
             <blockquote className="text-slate-600 dark:text-slate-300">
-              <p>"As a non-coder, the ability to generate and insert flawless, interactive tools is revolutionary. It's the only tool that truly understands my content's intent and suggests relevant, high-impact enhancements."</p>
+              <p>"As a non-coder, the ability to generate and insert flawless, interactive quizzes is revolutionary. It's the only tool that truly understands my content's intent and suggests relevant, high-impact enhancements."</p>
               <footer className="mt-3 text-sm font-semibold text-slate-800 dark:text-slate-100">- Mark T., Affiliate Blogger</footer>
             </blockquote>
           </Card>

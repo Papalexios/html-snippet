@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useAppContext } from '../context/AppContext';
 import { AiProvider } from '../types';
@@ -26,6 +25,7 @@ export default function ApiConfiguration(): React.ReactNode {
 
   const providerDetails = AI_PROVIDERS[selectedProvider];
   const validationStatus = apiValidationStatuses[selectedProvider];
+  const isValidating = validationStatus === 'validating';
 
   const handleSaveAndValidate = () => {
     validateAndSaveApiKey(selectedProvider);
@@ -45,7 +45,10 @@ export default function ApiConfiguration(): React.ReactNode {
   };
 
   return (
-    <div className="bg-slate-50/50 dark:bg-slate-900/50 rounded-xl p-4 sm:p-6 border border-slate-200 dark:border-slate-700">
+    <fieldset
+      disabled={isValidating}
+      className="bg-slate-50/50 dark:bg-slate-900/50 rounded-xl p-4 sm:p-6 border border-slate-200 dark:border-slate-700 transition-opacity duration-300 disabled:opacity-70"
+    >
       <div className="flex flex-wrap items-center gap-2 mb-6">
         {Object.values(AiProvider).map((provider) => (
           <button
@@ -99,8 +102,8 @@ export default function ApiConfiguration(): React.ReactNode {
         )}
 
         <div className="flex flex-col sm:flex-row gap-4 items-start">
-            <Button onClick={handleSaveAndValidate} disabled={validationStatus === 'validating'} className="w-full sm:w-auto">
-                {validationStatus === 'validating' ? <><Spinner/>Validating...</> : 'Save & Validate Key'}
+            <Button onClick={handleSaveAndValidate} disabled={isValidating} className="w-full sm:w-auto">
+                {isValidating ? <><Spinner/>Validating...</> : 'Save & Validate Key'}
             </Button>
             <div className="text-xs text-slate-500 dark:text-slate-400 pt-1">
                 {validationStatus === 'invalid' && <p className="text-red-500">Validation failed. Please check your key and model name.</p>}
@@ -108,6 +111,6 @@ export default function ApiConfiguration(): React.ReactNode {
             </div>
         </div>
       </div>
-    </div>
+    </fieldset>
   );
 }
