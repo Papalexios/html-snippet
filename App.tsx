@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useAppContext } from './context/AppContext';
 import Step1Configure from './components/Step1_Configure';
@@ -67,17 +68,31 @@ export default function App(): React.ReactNode {
         <ToolGenerationModal />
         <QuizAnalyticsModal />
 
-        <footer className="text-center mt-8 sm:mt-12 py-6 border-t border-slate-200/50 dark:border-slate-800/50">
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            © {new Date().getFullYear()} QuizForge AI by <a href="https://affiliatemarketingforsuccess.com" target="_blank" rel="noopener noreferrer" className="hover:underline">AffiliateMarketingForSuccess.com</a>
-          </p>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mt-2 space-x-2">
-            <a href="https://affiliatemarketingforsuccess.com/blog/" target="_blank" rel="noopener noreferrer" className="hover:underline">Blog</a>
-            <span>&bull;</span>
-            <a href="https://affiliatemarketingforsuccess.com/affiliate-marketing/beginners-guide-to-affiliate-marketing/" target="_blank" rel="noopener noreferrer" className="hover:underline">Learn Affiliate Marketing</a>
-            <span>&bull;</span>
-            <a href="https://affiliatemarketingforsuccess.com/ai/ai-future-of-seo/" target="_blank" rel="noopener noreferrer" className="hover:underline">AI for SEO</a>
-          </p>
+        <footer className="text-center mt-8 sm:mt-12 py-8 border-t border-slate-200/50 dark:border-slate-800/50">
+          <div className="flex flex-col items-center gap-4">
+            <img
+              src="https://affiliatemarketingforsuccess.com/wp-content/uploads/2023/03/cropped-Affiliate-Marketing-for-Success-Logo-Edited.png?lm=6666FEE0"
+              alt="Affiliate Marketing for Success Logo"
+              className="h-16 w-auto"
+            />
+            <p className="text-sm text-slate-600 dark:text-slate-400 max-w-lg">
+              This App is Created by Alexios Papaioannou, Owner of <a href="https://affiliatemarketingforsuccess.com" target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-600 dark:text-blue-400 hover:underline">affiliatemarketingforsuccess.com</a>
+            </p>
+            <div className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+              <p className="font-semibold mb-3">Learn more about:</p>
+              <div className="flex flex-wrap justify-center items-center gap-x-4 gap-y-2">
+                <a href="https://affiliatemarketingforsuccess.com/affiliate-marketing" target="_blank" rel="noopener noreferrer" className="font-medium text-blue-600 dark:text-blue-400 hover:underline">Affiliate Marketing</a>
+                <span className="text-slate-300 dark:text-slate-600 hidden sm:inline">&bull;</span>
+                <a href="https://affiliatemarketingforsuccess.com/ai" target="_blank" rel="noopener noreferrer" className="font-medium text-blue-600 dark:text-blue-400 hover:underline">AI</a>
+                <span className="text-slate-300 dark:text-slate-600 hidden sm:inline">&bull;</span>
+                <a href="https://affiliatemarketingforsuccess.com/seo" target="_blank" rel="noopener noreferrer" className="font-medium text-blue-600 dark:text-blue-400 hover:underline">SEO</a>
+                <span className="text-slate-300 dark:text-slate-600 hidden sm:inline">&bull;</span>
+                <a href="https://affiliatemarketingforsuccess.com/blogging" target="_blank" rel="noopener noreferrer" className="font-medium text-blue-600 dark:text-blue-400 hover:underline">Blogging</a>
+                <span className="text-slate-300 dark:text-slate-600 hidden sm:inline">&bull;</span>
+                <a href="https://affiliatemarketingforsuccess.com/review" target="_blank" rel="noopener noreferrer" className="font-medium text-blue-600 dark:text-blue-400 hover:underline">Reviews</a>
+              </div>
+            </div>
+          </div>
         </footer>
       </div>
     </div>

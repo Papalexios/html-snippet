@@ -71,7 +71,8 @@ export default function QuizAnalyticsModal() {
 
     if (!isAnalyticsModalOpen) return null;
 
-    const maxCount = data ? Math.max(...Object.values(data.resultCounts), 0) : 0;
+    // FIX: Cast the result of Object.values to number[] to satisfy Math.max.
+    const maxCount = data ? Math.max(...(Object.values(data.resultCounts) as number[]), 0) : 0;
     const totalCompletions = data?.completions || 0;
 
     const renderContent = () => {
@@ -109,9 +110,11 @@ export default function QuizAnalyticsModal() {
                         <h4 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-3">Results Breakdown</h4>
                         <div className="space-y-3">
                             {Object.entries(data.resultCounts)
-                                .sort(([, a], [, b]) => b - a) // Sort by count descending
+                                // FIX: Cast sorting values to numbers for arithmetic operation.
+                                .sort(([, a], [, b]) => (b as number) - (a as number)) // Sort by count descending
                                 .map(([title, count]) => {
-                                const percentage = totalCompletions > 0 ? (count / totalCompletions) * 100 : 0;
+                                // FIX: Cast count to a number for arithmetic operation.
+                                const percentage = totalCompletions > 0 ? ((count as number) / totalCompletions) * 100 : 0;
                                 return (
                                     <div key={title} className="flex items-center gap-4 text-sm">
                                         <div className="w-24 font-medium text-slate-600 dark:text-slate-300 truncate" title={title}>{title}</div>
@@ -126,7 +129,7 @@ export default function QuizAnalyticsModal() {
                                                 aria-label={`${title} percentage`}
                                             ></div>
                                         </div>
-                                        <div className="w-16 text-right font-semibold text-slate-800 dark:text-slate-200">{count} <span className="text-xs text-slate-500">({Math.round(percentage)}%)</span></div>
+                                        <div className="w-16 text-right font-semibold text-slate-800 dark:text-slate-200">{count as number} <span className="text-xs text-slate-500">({Math.round(percentage)}%)</span></div>
                                     </div>
                                 );
                             })}

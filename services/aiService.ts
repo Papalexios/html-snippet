@@ -205,68 +205,61 @@ const getHtmlGenerationPrompt = (postTitle: string, postContent: string, idea: T
     *   **Source Content:** "${cleanContent}"
 
     // =================================================================================
-    // SECTION 0: THE ACCURACY & GROUNDING MANDATE (NON-NEGOTIABLE)
+    // SECTION 0: CORE DIRECTIVES (NON-NEGOTIABLE)
     // =================================================================================
-    **Your primary directive is to act as a rigorous fact-checker.**
-    1.  **EXCLUSIVE SOURCE:** ALL information used for questions, answers, and explanations MUST be directly derived from the provided "Source Content" above. **DO NOT use any external knowledge.**
-    2.  **VERIFIABILITY:** Every correct answer and explanation must be directly verifiable from a statement or concept within the source text.
-    3.  **NO HALLUCINATION:** If the source content is insufficient to create a high-quality quiz, you must state this and refuse to generate the quiz. Do not invent information.
+    1.  **ACCURACY MANDATE:** ALL information used for questions, answers, and explanations MUST be directly derived from the provided "Source Content". DO NOT use any external knowledge. Every fact must be verifiable from the text.
+    2.  **SEO & DISCOVERABILITY MANDATE:** Your response MUST include specific HTML structures to maximize search engine visibility. This is a critical requirement.
+        *   **JSON-LD Schema:** At the very top of your HTML response, before any other tags, include a \\\`<script type="application/ld+json">\\\` block with valid Schema.org markup for a Quiz. You MUST populate this schema using the content you generate.
+        *   **NoScript Fallback:** After the main quiz container \\\`</div>\\\`, you MUST include a \\\`<noscript>\\\` tag containing a simple, accessible, text-only version of the quiz for search engines (use \\\`<h4>\\\` for questions, \\\`<p>\\\` for the correct answer).
+    3.  **CONSISTENCY MANDATE:** The questions and correct answers you generate MUST be identical across the JSON-LD schema, the \\\`<noscript>\\\` block, and the JavaScript \\\`quizData\\\` object.
 
     // =================================================================================
     // SECTION 1: QUIZ CONTENT & PEDAGOGY (The Brains of a Valuable Tool)
     // =================================================================================
     **1.1. High-Cognition Question Design:**
     *   Generate 5-7 multiple-choice questions.
-    *   **PROHIBITED:** Simple, low-value recall questions (e.g., "What is X?").
-    *   **MANDATORY:** Create questions that require higher-order thinking:
-        *   **Scenario-Based:** "A user faces [scenario from article]. Based on the text, what is their best course of action?"
-        *   **Comparative Analysis:** "According to the article, what is the key advantage of [Concept A] over [Concept B]?"
-        *   **Cause & Effect:** "The article states [Cause]. What is the most likely outcome?"
-    *   **Pedagogically Valuable Distractors:** Incorrect answers must be plausible and represent common, subtle misunderstandings of the source text.
+    *   **PROHIBITED:** Simple recall questions.
+    *   **MANDATORY:** Create higher-order thinking questions: scenario-based, comparative analysis, or cause & effect.
+    *   **Pedagogically Valuable Distractors:** Incorrect answers must be plausible and represent common misunderstandings of the source text.
 
     **1.2. The Socratic "Mini-Lesson" Feedback Loop (CRITICAL FOR VALUE):**
-    *   For **EVERY** question, provide a detailed explanation that appears *after* the user answers.
-    *   This explanation is the core learning component and MUST follow this 3-part structure:
-        1.  **Direct Answer:** Start with "Correct!" or "Not quite." followed by a clear statement of the correct answer and *why* it is correct, quoting or paraphrasing the source text.
-        2.  **Distractor Analysis:** Explain precisely why the chosen incorrect answer is wrong, correcting the specific misunderstanding.
-        3.  **Deeper Insight:** End with a "Key Takeaway:" or "Pro Tip:" sentence that connects the concept to a broader principle from the article, solidifying the learning.
+    *   For **EVERY** question, provide a detailed explanation that appears *after* the user answers, following this 3-part structure:
+        1.  **Direct Answer:** Start with "Correct!" or "Not quite," state the correct answer, and explain *why* it's correct based on the source text.
+        2.  **Distractor Analysis:** Explain precisely why the chosen incorrect answer is wrong.
+        3.  **Deeper Insight:** End with a "Key Takeaway:" or "Pro Tip:" connecting the concept to a broader principle from the article.
 
     // =================================================================================
     // SECTION 2: AESTHETICS & UX ("PREMIUM & MODERN" MANDATE)
     // =================================================================================
-    **2.1. Overall Design Philosophy:**
-    *   **Seamless Integration:** The design should feel native to a professional blog. Use a clean, full-width container with subtle borders and background colors. NO floating "glassmorphism" cards.
-    *   **Superior Readability:** Employ a refined typographic scale. Use a larger font for questions and clear, legible fonts for options and explanations. Use generous whitespace.
-    *   **Mobile-First & Flawless:** The layout MUST be perfect on mobile devices and scale beautifully to desktops. Use fluid typography (e.g., with clamp()).
-
-    **2.2. The "Report Card" Results Screen:**
-    *   **Animated Donut Chart:** A large, animated SVG donut chart is mandatory for celebrating the score.
-    *   **Empowering Title:** Give the user a title based on score tiers (e.g., "Growth Mindset," "Seasoned Pro," "Topic Authority").
-    *   **Actionable Summary:** Provide a tailored summary and a clear, valuable next step that encourages re-engagement with the site's content.
-    *   **Clean "Review Answers" Accordion:** Use a styled \\\`<details>\\\` element for a clean, collapsible summary of questions and explanations.
+    *   **Seamless Integration:** The design must feel native to a professional blog. Use a clean, full-width container with subtle borders and background colors.
+    *   **Superior Readability:** Employ a refined typographic scale with generous whitespace.
+    *   **Mobile-First & Flawless:** The layout MUST be perfect on all screen sizes.
+    *   **"Report Card" Results Screen:** Must include an animated SVG donut chart, an empowering title based on score, and a "Review Answers" accordion using \\\`<details>\\\` elements.
 
     // =================================================================================
     // SECTION 3: TECHNICAL & IMPLEMENTATION MANDATES (The Flawless Code)
     // =================================================================================
-    **3.1. RAW HTML ONLY:** Your response MUST start with \\\`<script src="https://cdn.tailwindcss.com"></script>\\\` and end with the final closing \\\`</script>\\\` tag. NO Markdown fences (\\\`\\\`\\\`html\\\`\\\`), \\\`<html>\\\`, \\\`<head>\\\`, or \\\`<body>\\\` tags.
+    **3.1. RAW HTML ONLY:** Your response MUST start with the \\\`<script type="application/ld+json">\\\` tag and end with the final closing \\\`</script>\\\` tag. NO Markdown fences (\\\`\\\`\\\`html\\\`\\\`), \\\`<html>\\\`, \\\`<head>\\\`, or \\\`<body>\\\` tags.
 
     **3.2. STRUCTURE & STYLING (Follow this EXACTLY):**
-        *   Start with the Tailwind CDN script.
-        *   Root element: \\\`<div id="${uniqueId}" class="qf-quiz-container font-sans text-slate-800" data-tool-id="%%TOOL_ID%%">...\\\`. The \\\`%%TOOL_ID%%\\\` is a server-side placeholder.
-        *   Include a single \\\`<style>\\\` block with this new, enhanced CSS for a more integrated and professional look.
+        *   **SELF-CONTAINED CSS:** Do NOT include any external stylesheets or CDN links (like Tailwind CSS). ALL necessary CSS must be in a single \\\`<style>\\\` block.
+        *   **FORBIDDEN:** Do NOT use Tailwind CSS classes like 'p-8', 'font-bold', 'text-center' in your HTML.
+        *   **MANDATORY:** Style ALL elements using ONLY the custom 'qf-' prefixed classes provided in the CSS below.
+        *   Root element: \\\`<div id="${uniqueId}" class="qf-quiz-container" data-tool-id="%%TOOL_ID%%">...\\\`. The \\\`%%TOOL_ID%%\\\` is a server-side placeholder.
+        *   Include a single \\\`<style>\\\` block with this exact CSS. It provides all the styles and utility classes you will need.
             \\\`
             #${uniqueId} {
                 --qf-accent-h: ${themeHsl.h}; --qf-accent-s: ${themeHsl.s}%; --qf-accent-l: ${themeHsl.l}%;
                 --qf-accent-color: hsl(var(--qf-accent-h), var(--qf-accent-s), var(--qf-accent-l));
                 --qf-accent-color-hover: hsl(var(--qf-accent-h), var(--qf-accent-s), calc(var(--qf-accent-l) - 8%));
-                --qf-accent-text-light: hsl(var(--qf-accent-h), var(--qf-accent-s), 10%);
-                --qf-accent-text-dark: hsl(var(--qf-accent-h), var(--qf-accent-s), 95%);
-                --qf-bg-light: 248 250 252; --qf-bg-dark: 30 41 59;
+                --qf-bg-light: 255 255 255; --qf-bg-dark: 30 41 59;
                 --qf-border-light: 226 232 240; --qf-border-dark: 51 65 85;
+                --qf-text-light: 15 23 42; --qf-text-dark: 203 213 225;
                 --qf-correct-color: 22 163 74; --qf-incorrect-color: 220 38 38;
-                font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+                font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+                color: rgb(var(--qf-text-light));
             }
-            #${uniqueId}.dark { color: #cbd5e1; }
+            #${uniqueId}.dark { color: rgb(var(--qf-text-dark)); }
             #${uniqueId} .qf-outer-container { background-color: rgb(var(--qf-bg-light)); border: 1px solid rgb(var(--qf-border-light)); transition: background-color 0.3s, border-color 0.3s; }
             #${uniqueId}.dark .qf-outer-container { background-color: rgb(var(--qf-bg-dark)); border-color: rgb(var(--qf-border-dark)); }
             #${uniqueId} .qf-progress-bar-inner { transition: width 0.4s ease-out; background-color: var(--qf-accent-color); }
@@ -275,7 +268,7 @@ const getHtmlGenerationPrompt = (postTitle: string, postContent: string, idea: T
             #${uniqueId}.dark .qf-option-label:hover { box-shadow: 0 4px 15px -3px rgba(0,0,0,0.2); }
             #${uniqueId} .qf-explanation { max-height: 0; opacity: 0; transform: translateY(-10px); transition: max-height 0.5s ease-out, opacity 0.5s ease-out, transform 0.5s ease-out; overflow: hidden; }
             #${uniqueId} .qf-explanation.qf-visible { max-height: 500px; opacity: 1; transform: translateY(0); }
-            #${uniqueId} .qf-feedback-icon { transform: scale(0.5); opacity: 0; transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1.2); } /* Added bounce effect */
+            #${uniqueId} .qf-feedback-icon { transform: scale(0.5); opacity: 0; transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1.2); }
             #${uniqueId} .qf-option-label.qf-selected .qf-radio-dot { transform: scale(1); opacity: 1; background-color: var(--qf-accent-color); }
             #${uniqueId} .qf-option-label.qf-correct .qf-radio-outer { border-color: rgb(var(--qf-correct-color)); }
             #${uniqueId} .qf-option-label.qf-correct .qf-radio-dot { background-color: rgb(var(--qf-correct-color)); transform: scale(1); opacity: 1; }
@@ -286,10 +279,9 @@ const getHtmlGenerationPrompt = (postTitle: string, postContent: string, idea: T
             #${uniqueId} .qf-donut-chart-track { stroke: rgb(var(--qf-border-light)); }
             #${uniqueId}.dark .qf-donut-chart-track { stroke: rgb(var(--qf-border-dark)); }
             #${uniqueId} .qf-donut-chart-progress { stroke: var(--qf-accent-color); transition: stroke-dashoffset 1s cubic-bezier(0.5, 0, 0.25, 1); }
-            #${uniqueId} details summary { list-style: none; } /* Hide the default marker */
-            #${uniqueId} details summary::-webkit-details-marker { display: none; }
-            #${uniqueId} .qf-summary-icon { transition: transform 0.2s; }
-            #${uniqueId} details[open] .qf-summary-icon { transform: rotate(90deg); }
+            #${uniqueId} details summary { list-style: none; } #_uniqueId details summary::-webkit-details-marker { display: none; }
+            #${uniqueId} .qf-summary-icon { transition: transform 0.2s; } #_uniqueId details[open] .qf-summary-icon { transform: rotate(90deg); }
+            .qf-p-8 { padding: 2rem; } .qf-m-auto { margin: auto; } .qf-mt-4 { margin-top: 1rem; } .qf-mb-4 { margin-bottom: 1rem; } .qf-mb-6 { margin-bottom: 1.5rem; } .qf-w-full { width: 100%; } .qf-max-w-3xl { max-width: 48rem; } .qf-text-center { text-align: center; } .qf-font-bold { font-weight: 700; } .qf-text-2xl { font-size: 1.5rem; line-height: 2rem; } .qf-text-lg { font-size: 1.125rem; line-height: 1.75rem; } .qf-rounded-xl { border-radius: 0.75rem; } .qf-shadow-lg { box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); } .qf-hidden { display: none; }
             \\\`
 
     **3.3. BUG-FREE, ISOLATED VANILLA JAVASCRIPT (CRITICAL):**
@@ -301,18 +293,17 @@ const getHtmlGenerationPrompt = (postTitle: string, postContent: string, idea: T
             const quizData = {
                 questions: [ { question: \\\`...\\\`, options: [{ text: \\\`...\\\`, isCorrect: true }, ...], explanation: \\\`...\\\` } ],
                 results: [
-                    { minScore: 0, title: \\\`Growth Mindset\\\`, summary: \\\`You're building a great foundation!\\\`, feedback: \\\`To deepen your understanding, try reviewing the section on X in the article.\\\` },
-                    { minScore: 3, title: \\\`Seasoned Pro\\\`, summary: \\\`You have a strong grasp of the material!\\\`, feedback: \\\`To challenge yourself further, apply these concepts to our advanced guide on Y.\\\` },
-                    { minScore: 5, title: \\\`Topic Authority\\\`, summary: \\\`Excellent! You're an expert on this topic.\\\`, feedback: \\\`You have a deep understanding. Share your high score and insights!\\\` }
+                    { minScore: 0, title: \\\`Growth Mindset\\\`, summary: \\\`You're building a great foundation!\\\` },
+                    { minScore: 3, title: \\\`Seasoned Pro\\\`, summary: \\\`You have a strong grasp of the material!\\\` },
+                    { minScore: 5, title: \\\`Topic Authority\\\`, summary: \\\`Excellent! You're an expert on this topic.\\\` }
                 ]
             };
             \\\`
-        *   **BUG FIX - START QUIZ LOGIC (NON-NEGOTIABLE):** The 'Start Quiz' button (e.g., with id \\\`qf-start-button\\\`) MUST have a click listener. When clicked, it MUST: 1. Add the \\\`qf-hidden\\\` class to the intro view container. 2. Remove the \\\`qf-hidden\\\` class from the main question view container. 3. Call the \\\`renderQuestion()\\\` function to display the first question. This logic must be flawless.
-        *   **BUG FIX - ROBUST BUTTON LOGIC:** Implement a state variable \\\`let isAnswerChecked = false;\\\`. The main action button must have a SINGLE event listener. This listener's callback will use an if/else check on \\\`isAnswerChecked\\\` to determine whether to call \\\`checkAnswer()\\\` or \\\`showNextQuestion()\\\`. This prevents the "unresponsive button" bug. The \\\`checkAnswer\\\` function will set \\\`isAnswerChecked = true\\\`, and \\\`renderQuestion\\\` will set it back to \\\`false\\\`.
+        *   **BUG FIX - START QUIZ LOGIC (NON-NEGOTIABLE):** The 'Start Quiz' button MUST have a click listener. When clicked, it MUST: 1. Add the \\\`qf-hidden\\\` class to the intro view. 2. Remove the \\\`qf-hidden\\\` class from the main question view. 3. Call \\\`renderQuestion()\\\`.
+        *   **BUG FIX - ROBUST BUTTON LOGIC:** Implement a state variable \\\`let isAnswerChecked = false;\\\`. The main action button's event listener MUST use an if/else check on this variable to call either \\\`checkAnswer()\\\` or \\\`showNextQuestion()\\\`. This prevents double-clicks and unresponsive buttons.
         *   **Analytics Submission:** The \\\`renderResults\\\` function must call a \\\`submitResults\\\` function that sends a POST request to \\\`/wp-json/quizforge/v1/submit\\\`.
-        *   **SVG Icons:** Embed required SVG icons directly in the HTML where needed.
 
-    Synthesize these instructions to generate the complete, self-contained, high-quality HTML quiz. The final product must be flawless, valuable, and beautiful.
+    Synthesize these instructions to generate the complete, self-contained, high-quality HTML quiz.
     `;
 };
 
