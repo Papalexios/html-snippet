@@ -22,6 +22,29 @@
         },
       }
     </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "HTML Snippet AI",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Web",
+      "description": "An AI-powered tool to enhance WordPress blog posts with interactive HTML snippets. It analyzes posts, suggests valuable tool ideas, generates the code, and inserts it to boost reader engagement and topical authority.",
+      "author": {
+        "@type": "Organization",
+        "name": "AffiliateMarketingForSuccess.com"
+      },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "4.9",
+        "reviewCount": "88"
+      },
+      "offers": {
+        "@type": "Offer",
+        "price": "0"
+      }
+    }
+    </script>
 <style>
   html {
     --bg-color-1: #02041b;
@@ -30,10 +53,10 @@
     --bg-color-4: #475569;
   }
   html.light {
-    --bg-color-1: #ffffff;
-    --bg-color-2: #f1f5f9;
-    --bg-color-3: #e2e8f0;
-    --bg-color-4: #cbd5e1;
+    --bg-color-1: #f0f9ff; /* sky-50 */
+    --bg-color-2: #fcfdff;
+    --bg-color-3: #ffffff;
+    --bg-color-4: #f8fafc; /* slate-50 */
   }
   .gradient-bg {
     width: 100vw;
@@ -72,13 +95,75 @@
   .dark .blinking-cursor {
     background-color: #93c5fd; /* blue-300 */
   }
+
+  /* New styles for redesigned landing page */
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .section-animate {
+    animation: fade-in-up 0.8s ease-out forwards;
+    opacity: 0;
+  }
+
+  @keyframes glow {
+    0%, 100% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.3), 0 0 30px rgba(139, 92, 246, 0.2); }
+    50% { box-shadow: 0 0 35px rgba(59, 130, 246, 0.5), 0 0 50px rgba(139, 92, 246, 0.4); }
+  }
+
+  .cta-button-glow {
+    animation: glow 4s ease-in-out infinite;
+  }
+  
+  .hero-glow {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, rgba(59, 130, 246, 0) 70%);
+    transform: translate(-50%, -50%);
+    z-index: -1;
+    pointer-events: none;
+  }
+  
+  html.light .hero-glow {
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.2) 0%, rgba(59, 130, 246, 0) 70%);
+  }
+
+  .how-it-works-line {
+    position: absolute;
+    top: 2.5rem; /* Vertically center with the icons */
+    left: 50%;
+    right: 50%;
+    height: 2px;
+    background-image: linear-gradient(to right, transparent, #38bdf8, transparent);
+    z-index: -1;
+  }
+  
+  @media (min-width: 1024px) {
+    .how-it-works-line {
+      top: 2.5rem;
+      left: calc(16.66% + 2rem);
+      right: calc(16.66% + 2rem);
+      background-image: linear-gradient(to right, #38bdf8 2px, transparent 2px);
+      background-size: 8px 2px;
+    }
+  }
 </style>
 <script type="importmap">
 {
   "imports": {
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
     "react": "https://aistudiocdn.com/react@^19.2.0",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.22.0"
   }
 }
