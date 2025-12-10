@@ -5,23 +5,29 @@ import { Card } from './common/Card';
 import { Spinner } from './common/Spinner';
 import { Skeleton } from './common/Skeleton';
 import { DynamicIcon } from './icons/DynamicIcon';
-import { ToolIdea } from '../types';
+import { ToolIdea, Placement, OptimizationStrategy } from '../types';
 import { CheckIcon } from './icons/CheckIcon';
 import { CodeBlock } from './common/CodeBlock';
 import { EyeIcon, CodeBracketIcon } from './icons/ToolIcons';
 import { XCircleIcon } from './icons/XCircleIcon';
+import { ClipboardIcon } from './icons/ActionIcons';
+import { SparklesIcon } from './icons/SparklesIcon';
+import { WorldIcon } from './icons/FormIcons';
+import { SearchIcon } from './icons/SearchIcon';
+import { LightbulbIcon } from './icons/LightbulbIcon';
+import { CheckCircleIcon } from './icons/CheckCircleIcon';
 
 const loadingMessages = [
     "Analyzing post for key topics...",
-    "Brainstorming engaging tool concepts...",
+    "Brainstorming engaging quiz concepts...",
     "Evaluating potential for SEO lift...",
     "Cross-referencing with content strategy...",
     "Finalizing creative ideas..."
 ];
 
 const IdeaCard: React.FC<{ idea: ToolIdea, onSelect: () => void, isSelected: boolean }> = ({ idea, onSelect, isSelected }) => (
-    <button onClick={onSelect} className={`w-full text-left transition-all duration-300 ease-out rounded-xl focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/50 ${isSelected ? 'shadow-2xl shadow-blue-500/20' : ''}`}>
-        <Card className={`h-full flex flex-col justify-between text-left transition-all group ${isSelected ? '!border-blue-500' : ''}`}>
+    <button onClick={onSelect} className={`w-full text-left transition-all duration-300 ease-out rounded-xl focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/50 ${isSelected ? 'shadow-2xl shadow-blue-500/20 scale-105' : 'hover:scale-105'}`}>
+        <Card className={`h-full flex flex-col justify-between text-left transition-all group ${isSelected ? '!border-blue-500 ring-2 ring-blue-500' : ''}`}>
             <div>
                 <div className="flex items-center gap-3">
                     <span className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-600' : 'bg-blue-100 dark:bg-blue-900/50'}`}>
@@ -46,53 +52,70 @@ const SkeletonIdeaCard: React.FC = () => (
     </Card>
 );
 
-const hexToHsl = (hex: string): { h: number, s: number, l: number } | null => {
-    if (!hex || typeof hex !== 'string') return null;
-    let r = 0, g = 0, b = 0;
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    if(result){
-        r = parseInt(result[1], 16); g = parseInt(result[2], 16); b = parseInt(result[3], 16);
-    } else {
-        const shorthandResult = /^#?([a-f\d])([a-f\d])([a-f\d])$/i.exec(hex);
-        if(shorthandResult){
-            r = parseInt(shorthandResult[1] + shorthandResult[1], 16); g = parseInt(shorthandResult[2] + shorthandResult[2], 16); b = parseInt(shorthandResult[3] + shorthandResult[3], 16);
-        } else { return null; }
-    }
-    r /= 255; g /= 255; b /= 255;
-    const max = Math.max(r, g, b), min = Math.min(r, g, b);
-    let h = 0, s = 0, l = (max + min) / 2;
-    if (max !== min) {
-        const d = max - min;
-        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-        switch (max) {
-            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-            case g: h = (b - r) / d + 2; break;
-            case b: h = (r - g) / d + 4; break;
-        }
-        h /= 6;
-    }
-    return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
-}
+const PlacementOption: React.FC<{
+    value: Placement;
+    title: string;
+    description: string;
+    icon: React.ReactNode;
+    currentPlacement: Placement;
+    setPlacement: (placement: Placement) => void;
+}> = ({ value, title, description, icon, currentPlacement, setPlacement }) => (
+    <label htmlFor={`placement-${value}`} className={`block p-4 rounded-xl border-2 transition-all cursor-pointer ${currentPlacement === value ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 shadow-lg' : 'bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'}`}>
+        <input type="radio" id={`placement-${value}`} name="placement" value={value} checked={currentPlacement === value} onChange={() => setPlacement(value)} className="sr-only" />
+        <div className="flex items-center gap-3">
+            <span className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-colors ${currentPlacement === value ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300'}`}>
+                {icon}
+            </span>
+            <h4 className="font-bold text-slate-900 dark:text-slate-100">{title}</h4>
+        </div>
+        <p className="mt-2 text-xs text-slate-600 dark:text-slate-400 pl-11">{description}</p>
+    </label>
+);
+
+const StrategyOption: React.FC<{
+    value: OptimizationStrategy;
+    title: string;
+    description: string;
+    icon: React.ReactNode;
+    currentStrategy: OptimizationStrategy;
+    setStrategy: (strategy: OptimizationStrategy) => void;
+}> = ({ value, title, description, icon, currentStrategy, setStrategy }) => (
+     <label htmlFor={`strategy-${value}`} className={`block p-4 rounded-xl border-2 transition-all cursor-pointer ${currentStrategy === value ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500' : 'bg-white/50 dark:bg-slate-800/30 border-slate-200 dark:border-slate-700/60 hover:border-slate-300 dark:hover:border-slate-600'}`}>
+        <input type="radio" id={`strategy-${value}`} name="strategy" value={value} checked={currentStrategy === value} onChange={() => setStrategy(value)} className="sr-only" />
+        <div className="flex items-center gap-3">
+            <span className="flex-shrink-0">{icon}</span>
+            <h4 className="font-bold text-slate-900 dark:text-slate-100">{title}</h4>
+        </div>
+        <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">{description}</p>
+    </label>
+);
 
 
 export default function ToolGenerationModal() {
-    const { state, closeToolGenerationModal, generateIdeasForModal, selectIdea, generateSnippetForModal, insertSnippet, setThemeColor } = useAppContext();
-    const { isToolGenerationModalOpen, activePostForModal, modalStatus, modalError, toolIdeas, selectedIdea, generatedSnippet, themeColor } = state;
+    const { state, closeToolGenerationModal, generateIdeasForModal, selectIdea, generateEnhancedQuizForModal, insertSnippet, setThemeColor } = useAppContext();
+    const { isToolGenerationModalOpen, activePostForModal, modalStatus, modalError, toolIdeas, selectedIdea, generatedQuizHtml, themeColor, manualShortcode, suggestedContentUpdate } = state;
 
     const [loadingMessage, setLoadingMessage] = useState(loadingMessages[0]);
-    const [activeTab, setActiveTab] = useState<'code' | 'preview'>('code');
+    const [activeTab, setActiveTab] = useState<'preview' | 'code'>('preview');
     const [iframeSrcDoc, setIframeSrcDoc] = useState('');
+    const [placement, setPlacement] = useState<Placement>('ai');
+    const [optimizationStrategy, setOptimizationStrategy] = useState<OptimizationStrategy>('standard');
+    const [shortcodeCopied, setShortcodeCopied] = useState(false);
+    const [contentUpdateCopied, setContentUpdateCopied] = useState(false);
+    const [currentStep, setCurrentStep] = useState(0);
 
-    const isGeneratingIdeas = modalStatus === 'loading_ideas';
-    const isStreaming = modalStatus === 'generating_snippet';
-    const isInserting = modalStatus === 'inserting_snippet';
-    const isLoading = isGeneratingIdeas || isStreaming || isInserting;
+    const isGeneratingIdeas = modalStatus === 'loading' && toolIdeas.length === 0;
+    const isGeneratingQuiz = modalStatus === 'loading' && !!selectedIdea && !generatedQuizHtml;
+    const isInserting = modalStatus === 'loading' && !!generatedQuizHtml && !isGeneratingQuiz;
 
     const currentStage = useMemo(() => {
         if (modalStatus === 'success') return 'success';
-        if (selectedIdea) return 'generate';
+        if (generatedQuizHtml) return 'publish';
+        // CRITICAL FIX: Only show generation screen if we are actually loading.
+        // If modalStatus is 'error', we fall back to 'ideas' so the user can retry.
+        if (modalStatus === 'loading' && selectedIdea) return 'generate'; 
         return 'ideas';
-    }, [modalStatus, selectedIdea]);
+    }, [modalStatus, selectedIdea, generatedQuizHtml]);
 
     useEffect(() => {
         if (isToolGenerationModalOpen && !activePostForModal) {
@@ -101,13 +124,7 @@ export default function ToolGenerationModal() {
             generateIdeasForModal();
         }
     }, [isToolGenerationModalOpen, activePostForModal, toolIdeas.length, modalStatus, generateIdeasForModal, closeToolGenerationModal]);
-
-    useEffect(() => {
-        if (selectedIdea && generatedSnippet.length === 0 && modalStatus === 'idle') {
-            generateSnippetForModal();
-        }
-    }, [selectedIdea, generatedSnippet.length, modalStatus, generateSnippetForModal]);
-
+    
     useEffect(() => {
         if (isGeneratingIdeas) {
             const intervalId = setInterval(() => {
@@ -116,39 +133,74 @@ export default function ToolGenerationModal() {
             return () => clearInterval(intervalId);
         }
     }, [isGeneratingIdeas]);
-
+    
     useEffect(() => {
-        if (isStreaming) setActiveTab('code');
-    }, [isStreaming]);
-
-    useEffect(() => {
-        if (generatedSnippet) {
-            let finalSnippet = generatedSnippet;
-            const hsl = hexToHsl(themeColor);
-            if (hsl) {
-                const baseHsl = `${hsl.h} ${hsl.s}% ${hsl.l}%`;
-                const hoverHsl = `${hsl.h} ${hsl.s}% ${Math.max(0, hsl.l - 8)}%`;
-                const focusRingHsl = `${hsl.h} ${hsl.s}% ${Math.min(100, hsl.l + 30)}%`;
-
-                // More robustly replace all CSS variables if they exist
-                finalSnippet = finalSnippet.replace(/--accent-color:\s*[^;]+;/, `--accent-color: ${baseHsl};`);
-                finalSnippet = finalSnippet.replace(/--accent-color-hover:\s*[^;]+;/, `--accent-color-hover: ${hoverHsl};`);
-                finalSnippet = finalSnippet.replace(/--accent-color-focus-ring:\s*[^;]+;/, `--accent-color-focus-ring: ${focusRingHsl};`);
-            }
-             // Inject the current theme class into the iframe's html tag
-            const finalHtml = `<!DOCTYPE html><html class="${state.theme}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head><body style="background-color: transparent;">${finalSnippet}</body></html>`;
-            setIframeSrcDoc(finalHtml);
+        if (generatedQuizHtml) {
+            setIframeSrcDoc(`<!DOCTYPE html><html class="${state.theme}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head><body style="background-color: transparent;">${generatedQuizHtml}</body></html>`);
         }
-    }, [generatedSnippet, themeColor, state.theme]);
+    }, [generatedQuizHtml, themeColor, state.theme]);
+
+    const generationSteps = useMemo(() => {
+        const steps = [
+            { text: "Analyzing post content for key topics...", icon: <SparklesIcon className="w-5 h-5 text-purple-500" /> },
+            { text: "Brainstorming higher-order questions...", icon: <LightbulbIcon className="w-5 h-5 text-yellow-500" /> },
+        ];
+        if (optimizationStrategy === 'fact_check') {
+            steps.push({ text: "Verifying facts with Google Search...", icon: <SearchIcon className="w-5 h-5 text-blue-500" /> });
+        }
+        if (optimizationStrategy === 'geo') {
+            steps.push({ text: "Grounding with Google Maps data...", icon: <WorldIcon className="w-5 h-5 text-green-500" /> });
+        }
+        steps.push(
+            { text: "Crafting Socratic explanations...", icon: <ClipboardIcon className="w-5 h-5 text-slate-500" /> },
+            { text: "Generating content integration suggestions...", icon: <CodeBracketIcon className="w-5 h-5 text-pink-500" /> },
+            { text: "Assembling final interactive snippet...", icon: <CheckCircleIcon className="w-5 h-5 text-indigo-500" /> }
+        );
+        return steps;
+    }, [optimizationStrategy]);
+
+    useEffect(() => {
+        let interval: ReturnType<typeof setInterval>;
+        if (isGeneratingQuiz) {
+            setCurrentStep(0);
+            interval = setInterval(() => {
+                setCurrentStep(prevStep => {
+                    if (prevStep >= generationSteps.length - 1) {
+                        clearInterval(interval);
+                        return prevStep;
+                    }
+                    return prevStep + 1;
+                });
+            }, 2500);
+        }
+        return () => clearInterval(interval);
+    }, [isGeneratingQuiz, generationSteps.length]);
+    
+    const handleCopyShortcode = () => {
+        if (!manualShortcode) return;
+        navigator.clipboard.writeText(manualShortcode);
+        setShortcodeCopied(true);
+        setTimeout(() => setShortcodeCopied(false), 2500);
+    };
+
+    const handleCopyContentUpdate = () => {
+        if (!suggestedContentUpdate) return;
+        navigator.clipboard.writeText(suggestedContentUpdate);
+        setContentUpdateCopied(true);
+        setTimeout(() => setContentUpdateCopied(false), 2500);
+    };
 
     if (!isToolGenerationModalOpen || !activePostForModal) return null;
 
     const renderIdeasStage = () => (
         <>
-            <h2 className="text-xl sm:text-2xl font-bold mb-4 text-slate-800 dark:text-slate-100">1. Choose an Idea</h2>
+            <div>
+                <h2 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100">1. Choose a Quiz Idea</h2>
+                <p className="text-slate-600 dark:text-slate-400 mt-1">Select the concept that best fits your post's goal.</p>
+            </div>
             {isGeneratingIdeas ? (
                  <div className="text-center">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
                         <SkeletonIdeaCard/>
                         <SkeletonIdeaCard/>
                         <SkeletonIdeaCard/>
@@ -156,13 +208,87 @@ export default function ToolGenerationModal() {
                     <p className="mt-4 text-sm text-slate-500 dark:text-slate-400 animate-pulse">{loadingMessage}</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
                     {toolIdeas.map((idea, index) => (
-                        <IdeaCard key={index} idea={idea} onSelect={() => selectIdea(idea)} isSelected={false}/>
+                        <IdeaCard key={index} idea={idea} onSelect={() => selectIdea(idea)} isSelected={selectedIdea?.title === idea.title}/>
                     ))}
                 </div>
             )}
+            
+            {toolIdeas.length > 0 && !isGeneratingIdeas && (
+                <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+                     <h2 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100">2. Select an Optimization Strategy</h2>
+                     <p className="text-slate-600 dark:text-slate-400 mt-1">Supercharge your quiz with advanced AI capabilities.</p>
+                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mt-4">
+                        <StrategyOption value="standard" title="Standard" description="A high-quality, engaging quiz based directly on your article's content." icon={<SparklesIcon className="w-6 h-6 text-blue-500"/>} currentStrategy={optimizationStrategy} setStrategy={setOptimizationStrategy} />
+                        <StrategyOption value="fact_check" title="Fact-Check (AEO)" description="Uses Google Search to verify data and adds source links. Best for timely or data-heavy topics." icon={<SearchIcon className="w-6 h-6 text-green-500"/>} currentStrategy={optimizationStrategy} setStrategy={setOptimizationStrategy} />
+                        <StrategyOption value="geo" title="Hyper-Local (GEO)" description="Uses Google Maps to generate location-aware questions and adds source links. For content with local intent." icon={<WorldIcon className="w-6 h-6 text-purple-500"/>} currentStrategy={optimizationStrategy} setStrategy={setOptimizationStrategy} />
+                     </div>
+                </div>
+            )}
+
+            <div className="mt-8 text-center">
+                <Button size="large" onClick={() => generateEnhancedQuizForModal(optimizationStrategy)} disabled={!selectedIdea || isGeneratingIdeas}>
+                    {modalError ? 'Retry Generation' : 'Generate Quiz'}
+                </Button>
+            </div>
         </>
+    );
+
+    const renderGenerationLoading = () => (
+        <div className="flex-grow flex flex-col items-center justify-center text-center p-8 min-h-[400px]">
+             <style>{`
+                @keyframes pop-in {
+                    0% { transform: scale(0.5); opacity: 0; }
+                    100% { transform: scale(1); opacity: 1; }
+                }
+                .animate-pop-in {
+                    animation: pop-in 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+                }
+            `}</style>
+            <h3 className="font-bold text-slate-800 dark:text-slate-200 text-2xl">
+                AI is Crafting Your Quiz...
+            </h3>
+            <p className="mt-2 mb-8 text-sm text-slate-500 dark:text-slate-400 max-w-md">
+                This advanced process ensures a high-quality, engaging quiz. Please wait a moment.
+            </p>
+            <div className="w-full max-w-md space-y-4 text-left">
+                {generationSteps.map((step, index) => (
+                    <div
+                        key={index}
+                        className={`flex items-center gap-4 p-3 rounded-lg transition-all duration-500 ${
+                            index <= currentStep ? 'bg-slate-100 dark:bg-slate-700/50' : ''
+                        }`}
+                    >
+                        <div className="flex-shrink-0">
+                            {index < currentStep ? (
+                                <CheckCircleIcon className="w-6 h-6 text-green-500 animate-pop-in" />
+                            ) : index === currentStep ? (
+                                <Spinner />
+                            ) : (
+                                <div className="w-6 h-6 flex items-center justify-center">
+                                    <div className="w-2.5 h-2.5 bg-slate-300 dark:bg-slate-600 rounded-full"></div>
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex-grow flex items-center gap-3">
+                            {step.icon}
+                            <span
+                                className={`transition-colors duration-500 ${
+                                    index < currentStep
+                                        ? 'text-slate-500 dark:text-slate-400 line-through'
+                                        : index === currentStep
+                                        ? 'font-semibold text-slate-700 dark:text-slate-200'
+                                        : 'text-slate-400 dark:text-slate-500'
+                                }`}
+                            >
+                                {step.text}
+                            </span>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
     );
     
     const TabButton: React.FC<{label: string; isActive: boolean; onClick: () => void; icon: React.ReactNode; disabled?: boolean;}> = ({ label, isActive, onClick, icon, disabled }) => (
@@ -171,39 +297,47 @@ export default function ToolGenerationModal() {
         </button>
     );
 
-    const renderGenerateStage = () => (
+    const renderPublishStage = () => (
          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 h-full">
-            <div className="lg:col-span-1 flex flex-col gap-4 sm:gap-6">
+            <div className="lg:col-span-1 flex flex-col gap-6">
                 <div>
-                    <h3 className="text-xl font-bold mb-2">2. Customize &amp; Insert</h3>
-                    <p className="text-slate-600 dark:text-slate-400 mb-4">Fine-tune the appearance, then insert it into your post with one click.</p>
+                    <h3 className="text-xl font-bold mb-2">3. Customize &amp; Publish</h3>
+                    <p className="text-slate-600 dark:text-slate-400">Fine-tune the appearance and choose how to add it to your post.</p>
                 </div>
                 
-                <Card className="p-4">
-                    <label htmlFor="theme-color" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Accent Color</label>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Live preview updates instantly.</p>
-                    <div className="mt-2 flex items-center gap-3 p-2 bg-slate-100 dark:bg-slate-900/50 rounded-md">
-                        <input id="theme-color" type="color" value={themeColor} onChange={(e) => setThemeColor(e.target.value)} className="w-10 h-10 p-0 border-none bg-transparent rounded cursor-pointer" aria-label="Select accent color" disabled={!generatedSnippet || isLoading} />
+                <div className="space-y-4">
+                     <h4 className="text-base font-semibold text-slate-700 dark:text-slate-300">Accent Color</h4>
+                    <div className="flex items-center gap-3 p-2 bg-slate-100 dark:bg-slate-900/50 rounded-md border border-slate-200 dark:border-slate-700">
+                        <input id="theme-color" type="color" value={themeColor} onChange={(e) => setThemeColor(e.target.value)} className="w-10 h-10 p-0 border-none bg-transparent rounded cursor-pointer" aria-label="Select accent color" disabled={!generatedQuizHtml || modalStatus === 'loading'} />
                         <span className="font-mono text-sm text-slate-500">{themeColor}</span>
                     </div>
-                </Card>
+                </div>
+
+                <div className="space-y-4">
+                    <h4 className="text-base font-semibold text-slate-700 dark:text-slate-300">Placement Options</h4>
+                    <div className="space-y-3">
+                         <PlacementOption value="ai" title="AI-Suggested (Recommended)" description="Intelligently places the quiz before the final H2/H3 heading for maximum impact." icon={<SparklesIcon className="w-5 h-5"/>} currentPlacement={placement} setPlacement={setPlacement} />
+                         <PlacementOption value="end" title="End of Post" description="Safely appends the quiz to the bottom of the article content." icon={<CodeBracketIcon className="w-5 h-5 -rotate-90"/>} currentPlacement={placement} setPlacement={setPlacement}/>
+                         <PlacementOption value="manual" title="Manual Placement" description="Gives you a shortcode to copy and paste anywhere in the WordPress editor." icon={<ClipboardIcon className="w-5 h-5"/>} currentPlacement={placement} setPlacement={setPlacement}/>
+                    </div>
+                </div>
 
                 <div className="space-y-3 mt-auto">
-                     <Button onClick={insertSnippet} disabled={isLoading || !generatedSnippet} className="w-full" size="large">
-                        {isInserting ? <><Spinner /> Inserting...</> : 'Insert into Post'}
+                     <Button onClick={() => insertSnippet(placement)} disabled={modalStatus === 'loading' || !generatedQuizHtml} className="w-full" size="large">
+                        {isInserting ? <><Spinner /> Publishing...</> : (placement === 'manual' ? 'Create & Get Shortcode' : 'Publish to Post')}
                      </Button>
-                     <Button onClick={generateSnippetForModal} className="w-full" variant="secondary" disabled={isLoading}>Regenerate Tool</Button>
+                     <Button onClick={() => generateEnhancedQuizForModal(optimizationStrategy)} className="w-full" variant="secondary" disabled={modalStatus === 'loading'}>Regenerate Quiz</Button>
                 </div>
             </div>
 
-            <div className="lg:col-span-2 flex flex-col min-h-[45vh] lg:min-h-0">
+            <div className="lg:col-span-2 flex flex-col min-h-[55vh] lg:min-h-0">
                 <div className="flex items-center border-b border-slate-200 dark:border-slate-700">
-                  <TabButton label="Code" isActive={activeTab === 'code'} onClick={() => setActiveTab('code')} icon={<CodeBracketIcon className="w-5 h-5"/>} />
-                  <TabButton label="Preview" isActive={activeTab === 'preview'} onClick={() => setActiveTab('preview')} icon={<EyeIcon className="w-5 h-5"/>} disabled={isStreaming} />
+                <TabButton label="Preview" isActive={activeTab === 'preview'} onClick={() => setActiveTab('preview')} icon={<EyeIcon className="w-5 h-5"/>} />
+                <TabButton label="Code" isActive={activeTab === 'code'} onClick={() => setActiveTab('code')} icon={<CodeBracketIcon className="w-5 h-5"/>} />
                 </div>
                 <div className="flex-grow bg-slate-100 dark:bg-slate-900/50 rounded-b-lg p-1 border border-t-0 border-slate-200 dark:border-slate-700">
-                    {activeTab === 'code' && (<CodeBlock code={generatedSnippet} isStreaming={isStreaming} />)}
-                    {activeTab === 'preview' && !isStreaming && (<iframe key={iframeSrcDoc} srcDoc={iframeSrcDoc} title="Generated Snippet Preview" className="w-full h-full border-0 rounded-md shadow-inner" sandbox="allow-scripts allow-forms"/>)}
+                    {activeTab === 'code' && (<CodeBlock code={generatedQuizHtml} />)}
+                    {activeTab === 'preview' && (<iframe key={iframeSrcDoc} srcDoc={iframeSrcDoc} title="Generated Snippet Preview" className="w-full h-full border-0 rounded-md shadow-inner bg-white dark:bg-slate-800"/>)}
                 </div>
             </div>
           </div>
@@ -214,12 +348,42 @@ export default function ToolGenerationModal() {
             <div className="w-16 h-16 mx-auto bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
                 <CheckIcon className="w-10 h-10 text-green-600 dark:text-green-400" />
             </div>
-            <h3 className="mt-4 text-2xl font-bold text-green-800 dark:text-green-300">Snippet Inserted Successfully!</h3>
+            <h3 className="mt-4 text-2xl font-bold text-green-800 dark:text-green-300">
+                {manualShortcode ? "Quiz Created!" : "Quiz Published Successfully!"}
+            </h3>
             <p className="mt-2 text-slate-600 dark:text-slate-400 max-w-md">
-              Your post <a href={activePostForModal.link} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline font-semibold"  dangerouslySetInnerHTML={{ __html: `"${activePostForModal.title.rendered}"` }}/> has been updated.
+                {manualShortcode 
+                    ? "Your quiz is ready. Copy the shortcode and suggested content updates below."
+                    : <>Your post <a href={activePostForModal.link} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline font-semibold" dangerouslySetInnerHTML={{ __html: `"${activePostForModal.title.rendered}"` }}/> has been updated.</>
+                }
             </p>
+
+            {manualShortcode && (
+                <div className="mt-6 w-full max-w-sm mx-auto relative">
+                    <input type="text" readOnly value={manualShortcode} className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md font-mono text-center p-3 pr-24" />
+                    <Button onClick={handleCopyShortcode} className="!absolute right-1 top-1 bottom-1 !rounded-sm !px-3">
+                         {shortcodeCopied ? <><CheckIcon className="w-4 h-4 mr-2"/> Copied!</> : <><ClipboardIcon className="w-4 h-4 mr-2"/> Copy</>}
+                    </Button>
+                </div>
+            )}
+            
+            {suggestedContentUpdate && (
+                 <div className="mt-6 w-full max-w-2xl text-left bg-slate-50/50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
+                    <div className="flex justify-between items-center">
+                        <h4 className="font-bold text-slate-800 dark:text-slate-200">Full-Circle Content Update</h4>
+                        <Button onClick={handleCopyContentUpdate} variant="secondary" className="!text-xs !py-1 !px-2">
+                             {contentUpdateCopied ? <><CheckIcon className="w-3 h-3 mr-1"/> Copied</> : <><ClipboardIcon className="w-3 h-3 mr-1"/> Copy Text</>}
+                        </Button>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-3">Copy and paste these paragraphs into your post for seamless integration.</p>
+                    <div className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap bg-white dark:bg-slate-800 p-3 rounded-md">
+                        {suggestedContentUpdate}
+                    </div>
+                </div>
+            )}
+
             <Button onClick={closeToolGenerationModal} className="mt-6">Finish</Button>
-          </div>
+        </div>
     );
     
     return (
@@ -227,7 +391,7 @@ export default function ToolGenerationModal() {
             <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-7xl p-6 sm:p-8 border border-slate-200 dark:border-slate-700 transform transition-all max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
                 <header className="flex-shrink-0 flex justify-between items-start mb-4">
                     <div>
-                        <h2 id="modal-title" className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100" dangerouslySetInnerHTML={{__html: `Tool for: "${activePostForModal.title.rendered}"`}}/>
+                        <h2 id="modal-title" className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100" dangerouslySetInnerHTML={{__html: `Quiz for: "${activePostForModal.title.rendered}"`}}/>
                         {selectedIdea && <p className="text-sm text-slate-500 dark:text-slate-400">Selected Idea: "{selectedIdea.title}"</p>}
                     </div>
                     <button onClick={closeToolGenerationModal} className="p-1 rounded-full text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
@@ -235,9 +399,10 @@ export default function ToolGenerationModal() {
                     </button>
                 </header>
 
-                <div className="flex-grow overflow-y-auto pr-2 -mr-2">
+                <div className="flex-grow overflow-y-auto pr-2 -mr-2 space-y-6">
                     {currentStage === 'ideas' && renderIdeasStage()}
-                    {currentStage === 'generate' && renderGenerateStage()}
+                    {currentStage === 'generate' && renderGenerationLoading()}
+                    {currentStage === 'publish' && renderPublishStage()}
                     {currentStage === 'success' && renderSuccessStage()}
 
                     {modalError && (

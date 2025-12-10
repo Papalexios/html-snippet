@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ClipboardIcon } from '../icons/ActionIcons';
 import { CheckIcon } from '../icons/CheckIcon';
-import './CodeBlock.css';
 
 interface CodeBlockProps {
   code: string;
-  isStreaming?: boolean;
 }
 
-export const CodeBlock: React.FC<CodeBlockProps> = ({ code, isStreaming = false }) => {
+export const CodeBlock: React.FC<CodeBlockProps> = ({ code }) => {
   const [copied, setCopied] = useState(false);
   const codeContainerRef = useRef<HTMLDivElement>(null);
 
@@ -32,7 +30,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ code, isStreaming = false 
         <button
           onClick={handleCopy}
           className="flex items-center gap-2 text-xs font-medium text-slate-400 hover:text-white transition-colors disabled:opacity-50"
-          disabled={copied || !code || isStreaming}
+          disabled={copied || !code}
         >
           {copied ? <CheckIcon className="w-4 h-4 text-green-400" /> : <ClipboardIcon className="w-4 h-4" />}
           {copied ? 'Copied!' : 'Copy Code'}
@@ -41,7 +39,6 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ code, isStreaming = false 
       <div ref={codeContainerRef} className="p-4 flex-grow overflow-auto">
         <pre><code className="text-sm text-slate-100 whitespace-pre-wrap break-words">
           {code}
-          {isStreaming && <span className="blinking-cursor"></span>}
         </code></pre>
       </div>
     </div>

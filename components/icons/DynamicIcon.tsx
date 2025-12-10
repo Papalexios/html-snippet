@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { LightbulbIcon } from './LightbulbIcon.tsx';
 import { CalculatorIcon, ChartIcon, ListIcon } from './ToolIcons.tsx';

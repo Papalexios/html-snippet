@@ -7,17 +7,17 @@ export const AI_PROVIDERS: Record<AiProvider, { name: string, defaultModel: stri
   },
   [AiProvider.OpenAI]: {
     name: 'OpenAI',
-    defaultModel: 'gpt-4o',
+    defaultModel: 'gpt-4-turbo',
   },
   [AiProvider.Anthropic]: {
-    name: 'Anthropic (Claude)',
+    name: 'Anthropic',
     defaultModel: 'claude-3-haiku-20240307',
   },
   [AiProvider.OpenRouter]: {
     name: 'OpenRouter',
     defaultModel: 'mistralai/mistral-7b-instruct',
     requiresModelField: true,
-  }
+  },
 };
 
 /**
@@ -27,14 +27,7 @@ export const AI_PROVIDERS: Record<AiProvider, { name: string, defaultModel: stri
  */
 export const SHORTCODE_DETECTION_REGEX = /\[\s*contentforge_tool\s+id\s*=\s*["']?(\d+)["']?\s*.*?\]/i;
 
-const SHORTCODE_BASE_REGEX_STRING = `\\[\\s*contentforge_tool\\s+id\\s*=\\s*["']?\\d+["']?\\s*.*?\\]`;
-
 /**
  * A global, case-insensitive regex to find and remove all instances of the shortcode.
- * This version is more robust, as it also removes the surrounding <p> tag if the shortcode is the only thing inside it.
- * This prevents empty paragraphs from being left behind after deletion.
  */
-export const SHORTCODE_REMOVAL_REGEX = new RegExp(
-  `(?:<p[^>]*>\\s*${SHORTCODE_BASE_REGEX_STRING}\\s*<\\/p>)|(?:${SHORTCODE_BASE_REGEX_STRING})`,
-  'gi'
-);
+export const SHORTCODE_REMOVAL_REGEX = /\[\s*contentforge_tool\s+id\s*=\s*["']?(\d+)["']?\s*.*?\]/gi;
