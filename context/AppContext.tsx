@@ -1,8 +1,9 @@
 import React, { createContext, useReducer, useContext, useCallback, useMemo, useEffect } from 'react';
-import { AppState, WordPressConfig, WordPressPost, ToolIdea, AiProvider, Theme, Status, Placement, PostFilter, OptimizationStrategy, ApiKeys, ApiValidationStatuses } from '../types';
+import { AppState, WordPressConfig, WordPressPost, ToolIdea, AiProvider, Theme, Status, Placement, PostFilter, OptimizationStrategy, ApiKeys, ApiValidationStatuses, ContentHealth } from '../types';
 import { fetchPosts, updatePost, checkSetup, createCfTool, deleteCfTool } from '../services/wordpressService';
-import { suggestToolIdeas, generateQuizAndMetadata, createQuizSnippet, generateContentUpdate, validateApiKey } from '../services/aiService';
+import { suggestToolIdeas, generateQuizAndMetadata, createQuizSnippet, generateContentUpdate, validateApiKey, analyzeContentHealth } from '../services/aiService';
 import { SHORTCODE_REMOVAL_REGEX } from '../constants';
+import { saveDraft, getDraft, deleteDraft } from '../services/persistenceService';
 
 type Action =
   | { type: 'RESET' }
@@ -28,7 +29,8 @@ type Action =
   | { type: 'OPEN_TOOL_MODAL', payload: WordPressPost }
   | { type: 'CLOSE_TOOL_MODAL' }
   | { type: 'SET_MODAL_STATUS', payload: { status: Status, error?: string | null } }
-  | { type: 'GET_IDEAS_SUCCESS'; payload: ToolIdea[] }
+  | { type: 'GET_IDEAS_SUCCESS'; payload: { ideas: ToolIdea[], health: ContentHealth } }
+  | { type: 'RESTORE_DRAFT'; payload: { ideas: ToolIdea[], health: ContentHealth, selectedIdea: ToolIdea | null, quizHtml: string, contentUpdate: string | null } }
   | { type: 'SELECT_IDEA'; payload: ToolIdea }
   | { type: 'SET_THEME_COLOR'; payload: string }
   | { type: 'GENERATE_ENHANCED_QUIZ_START' }
@@ -81,6 +83,7 @@ const initialState: AppState = {
   modalStatus: 'idle',
   modalError: null,
   toolIdeas: [],
+  contentHealth: null,
   selectedIdea: null,
   generatedQuizHtml: '',
   suggestedContentUpdate: null,
@@ -178,13 +181,15 @@ const appReducer = (state: AppState, action: Action): AppState => {
     case 'OPEN_TOOL_MODAL':
       return { ...state, isToolGenerationModalOpen: true, activePostForModal: action.payload };
     case 'CLOSE_TOOL_MODAL':
-      return { ...state, isToolGenerationModalOpen: false, activePostForModal: null, toolIdeas: [], selectedIdea: null, generatedQuizHtml: '', modalStatus: 'idle', modalError: null, manualShortcode: null, suggestedContentUpdate: null };
+      return { ...state, isToolGenerationModalOpen: false, activePostForModal: null, toolIdeas: [], contentHealth: null, selectedIdea: null, generatedQuizHtml: '', modalStatus: 'idle', modalError: null, manualShortcode: null, suggestedContentUpdate: null };
     case 'SET_MODAL_STATUS':
       return { ...state, modalStatus: action.payload.status, modalError: action.payload.error || null };
     case 'GET_IDEAS_SUCCESS':
-      return { ...state, modalStatus: 'idle', toolIdeas: action.payload };
+      return { ...state, modalStatus: 'idle', toolIdeas: action.payload.ideas, contentHealth: action.payload.health };
+    case 'RESTORE_DRAFT':
+      return { ...state, modalStatus: 'idle', toolIdeas: action.payload.ideas, contentHealth: action.payload.health, selectedIdea: action.payload.selectedIdea, generatedQuizHtml: action.payload.quizHtml, suggestedContentUpdate: action.payload.contentUpdate };
     case 'SELECT_IDEA':
-      return { ...state, selectedIdea: action.payload, generatedQuizHtml: '', suggestedContentUpdate: null }; // Reset generated content when idea changes
+      return { ...state, selectedIdea: action.payload, generatedQuizHtml: '', suggestedContentUpdate: null };
     case 'SET_THEME_COLOR':
       return { ...state, themeColor: action.payload };
     case 'GENERATE_ENHANCED_QUIZ_START':
@@ -248,12 +253,9 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       }
       if (cachedAiConfig) {
         const parsed = JSON.parse(cachedAiConfig);
-        
-        // --- CORRUPTION-PROOF LOADING ---
-        // Rigorously check if the stored apiKeys is a valid, non-null object.
         const validApiKeys = (parsed.apiKeys && typeof parsed.apiKeys === 'object' && !Array.isArray(parsed.apiKeys))
             ? parsed.apiKeys
-            : initialApiKeys; // If not, discard and use the default empty keys.
+            : initialApiKeys;
 
         aiState = {
             selectedProvider: parsed.selectedProvider || AiProvider.Gemini,
@@ -274,7 +276,6 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   });
   
-  // Effect to apply theme class to the root element
   useEffect(() => {
     const root = window.document.documentElement;
     root.classList.remove('light', 'dark');
@@ -282,7 +283,6 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     localStorage.setItem(THEME_KEY, state.theme);
   }, [state.theme]);
   
-  // Effect to fetch posts if config exists on load
   useEffect(() => {
     const fetchInitialPosts = async () => {
       if (state.wpConfig && state.posts.length === 0) {
@@ -406,7 +406,6 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   }, [state.apiKeys, state.openRouterModel]);
   
-  // Effect to save AI config changes to local storage
   useEffect(() => {
     const aiConfig = {
       selectedProvider: state.selectedProvider,
@@ -426,8 +425,24 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, []);
 
   // --- TOOL MODAL ACTIONS ---
-  const beginToolCreation = useCallback((post: WordPressPost) => {
+  const beginToolCreation = useCallback(async (post: WordPressPost) => {
     dispatch({ type: 'OPEN_TOOL_MODAL', payload: post });
+    
+    // Check for draft
+    const draft = await getDraft(post.id);
+    if (draft && draft.ideas && draft.health) {
+        dispatch({ 
+            type: 'RESTORE_DRAFT', 
+            payload: { 
+                ideas: draft.ideas, 
+                health: draft.health, 
+                selectedIdea: draft.selectedIdea || null,
+                quizHtml: draft.generatedQuizHtml || '',
+                contentUpdate: draft.suggestedContentUpdate || null
+            } 
+        });
+    }
+
   }, []);
   
   const closeToolGenerationModal = useCallback(() => {
@@ -438,32 +453,55 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     if (!state.activePostForModal) return;
     dispatch({ type: 'SET_MODAL_STATUS', payload: { status: 'loading' } });
     try {
-      const { title, content } = state.activePostForModal;
+      const { title, content, id } = state.activePostForModal;
       const contentForAnalysis = content.raw || content.rendered;
-      const ideas = await suggestToolIdeas(state, title.rendered, contentForAnalysis);
-      dispatch({ type: 'GET_IDEAS_SUCCESS', payload: ideas });
+      
+      const [ideas, health] = await Promise.all([
+          suggestToolIdeas(state, title.rendered, contentForAnalysis),
+          analyzeContentHealth(state, title.rendered, contentForAnalysis)
+      ]);
+      
+      await saveDraft(id, { ideas, health });
+      
+      dispatch({ type: 'GET_IDEAS_SUCCESS', payload: { ideas, health } });
     } catch (err) {
       dispatch({ type: 'SET_MODAL_STATUS', payload: { status: 'error', error: err instanceof Error ? err.message : 'Failed to generate ideas' } });
     }
   }, [state]);
   
-  const selectIdea = useCallback((idea: ToolIdea) => dispatch({ type: 'SELECT_IDEA', payload: idea }), []);
+  const selectIdea = useCallback((idea: ToolIdea) => {
+    if(state.activePostForModal) {
+        saveDraft(state.activePostForModal.id, { 
+            ideas: state.toolIdeas, 
+            health: state.contentHealth,
+            selectedIdea: idea 
+        });
+    }
+    dispatch({ type: 'SELECT_IDEA', payload: idea });
+  }, [state]);
 
   const generateEnhancedQuizForModal = useCallback(async (strategy: OptimizationStrategy) => {
     if (!state.activePostForModal || !state.selectedIdea) return;
     dispatch({ type: 'GENERATE_ENHANCED_QUIZ_START' });
     try {
-      const { title, content } = state.activePostForModal;
+      const { title, content, id } = state.activePostForModal;
       const contentForAnalysis = content.raw || content.rendered;
       
-      // Step 1: Generate quiz data and get grounding metadata
-      const quizResult = await generateQuizAndMetadata(state, title.rendered, contentForAnalysis, state.selectedIdea, strategy, state.posts);
+      // SOTA: Parallel Execution of Quiz Generation and Content Update
+      const [quizResult, contentUpdate] = await Promise.all([
+         generateQuizAndMetadata(state, title.rendered, contentForAnalysis, state.selectedIdea, strategy, state.posts),
+         generateContentUpdate(state, title.rendered, state.selectedIdea.title)
+      ]);
       
-      // Step 2: Create the HTML snippet from the quiz data and metadata
       const finalHtml = createQuizSnippet(quizResult, state.themeColor, state.theme);
       
-      // Step 3: Generate the suggested content update
-      const contentUpdate = await generateContentUpdate(state, title.rendered, state.selectedIdea.title);
+      await saveDraft(id, { 
+          ideas: state.toolIdeas, 
+          health: state.contentHealth, 
+          selectedIdea: state.selectedIdea, 
+          generatedQuizHtml: finalHtml, 
+          suggestedContentUpdate: contentUpdate 
+      });
 
       dispatch({ type: 'GENERATE_ENHANCED_QUIZ_SUCCESS', payload: { quizHtml: finalHtml, contentUpdate } });
     } catch (err) {
@@ -477,7 +515,6 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     if (typeof state.activePostForModal.content.raw !== 'string') {
         const errorMsg = "Could not insert quiz: Raw post content is not available for editing.";
         dispatch({ type: 'SET_MODAL_STATUS', payload: { status: 'error', error: errorMsg } });
-        console.error(errorMsg, { post: state.activePostForModal });
         return;
     }
 
@@ -487,6 +524,7 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         const shortcode = `[contentforge_tool id="${newToolId}"]`;
 
         if (placement === 'manual') {
+            await deleteDraft(state.activePostForModal.id);
             dispatch({ type: 'INSERT_MANUAL_SUCCESS', payload: shortcode });
             const { posts } = await fetchPosts(state.wpConfig, 1);
             dispatch({ type: 'SET_POSTS', payload: posts });
@@ -519,6 +557,7 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         
         await updatePost(state.wpConfig, state.activePostForModal.id, finalContent.trim());
         const { posts, totalPages } = await fetchPosts(state.wpConfig, 1);
+        await deleteDraft(state.activePostForModal.id);
         dispatch({ type: 'CONFIGURE_SUCCESS', payload: { config: state.wpConfig, posts, totalPages } });
         dispatch({ type: 'INSERT_SNIPPET_SUCCESS' });
 

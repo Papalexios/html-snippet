@@ -1,11 +1,48 @@
 
 // FIX: Replaced deprecated GenerateContentRequest with GenerateContentParameters.
 import { GoogleGenAI, Type, GenerateContentParameters, GenerateContentResponse } from "@google/genai";
-import { AppState, ToolIdea, AiProvider, QuizData, Theme, OptimizationStrategy, WordPressPost, GroundingMetadata, QuizGenerationResult } from '../types';
+import { AppState, ToolIdea, AiProvider, QuizData, Theme, OptimizationStrategy, WordPressPost, GroundingMetadata, QuizGenerationResult, ContentHealth } from '../types';
 import { AI_PROVIDERS } from "../constants";
 
+const AI_TIMEOUT_MS = 120000; // 120 Seconds
 
-// Helper to strip HTML tags for cleaner prompts
+// --- SOTA: INTELLIGENT CACHING LAYER ---
+const CACHE_PREFIX = 'qf_cache_v1_';
+const CACHE_TTL_MS = 1000 * 60 * 60 * 24; // 24 Hours
+
+interface CacheEntry<T> {
+    timestamp: number;
+    hash: string;
+    data: T;
+}
+
+const hashCode = (s: string) => {
+    let h = 0, l = s.length, i = 0;
+    if (l > 0) while (i < l) h = (h << 5) - h + s.charCodeAt(i++) | 0;
+    return h.toString(36);
+};
+
+const getCached = <T>(key: string, content: string): T | null => {
+    try {
+        const item = localStorage.getItem(CACHE_PREFIX + key);
+        if (!item) return null;
+        const entry: CacheEntry<T> = JSON.parse(item);
+        if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
+            localStorage.removeItem(CACHE_PREFIX + key);
+            return null;
+        }
+        if (entry.hash !== hashCode(content)) return null; 
+        return entry.data;
+    } catch { return null; }
+};
+
+const setCached = <T>(key: string, content: string, data: T) => {
+    try {
+        const entry: CacheEntry<T> = { timestamp: Date.now(), hash: hashCode(content), data };
+        localStorage.setItem(CACHE_PREFIX + key, JSON.stringify(entry));
+    } catch (e) { console.warn("Cache write failed (likely full)", e); }
+};
+
 const stripHtml = (html: string): string => {
     if (typeof document !== 'undefined') {
         const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -19,14 +56,12 @@ async function callGenericChatApi(state: AppState, prompt: string, isJson = fals
     const { selectedProvider, apiKeys, openRouterModel } = state;
     const providerConfig = AI_PROVIDERS[selectedProvider];
 
-    // --- PARANOID PRE-FLIGHT CHECK ---
-    if (!apiKeys || typeof apiKeys !== 'object' || !apiKeys[selectedProvider] || typeof apiKeys[selectedProvider] !== 'string' || apiKeys[selectedProvider].trim() === '') {
-        throw new Error(`API Key for ${providerConfig.name} is missing or invalid. Please configure it correctly on the main page.`);
+    if (!apiKeys || !apiKeys[selectedProvider]) {
+        throw new Error(`API Key for ${providerConfig.name} is missing.`);
     }
 
     const apiKey = apiKeys[selectedProvider];
 
-    // --- GEMINI (uses its own SDK, now with a timeout) ---
     if (selectedProvider === AiProvider.Gemini) {
         try {
             const ai = new GoogleGenAI({ apiKey });
@@ -38,27 +73,19 @@ async function callGenericChatApi(state: AppState, prompt: string, isJson = fals
                 request.config = { responseMimeType: "application/json" };
             }
             
-            // --- TIMEOUT IMPLEMENTATION FOR GEMINI SDK ---
             const generatePromise = ai.models.generateContent(request);
-            // Increased to 90 seconds to handle large posts
             const timeoutPromise = new Promise<GenerateContentResponse>((_, reject) => 
-                setTimeout(() => reject(new Error('Request timed out after 90 seconds.')), 90000)
+                setTimeout(() => reject(new Error(`Request timed out after ${AI_TIMEOUT_MS/1000} seconds.`)), AI_TIMEOUT_MS)
             );
 
             const response = await Promise.race([generatePromise, timeoutPromise]);
-            // --- END TIMEOUT IMPLEMENTATION ---
-            
             return response.text || '';
         } catch (e) {
             console.error("Gemini API Error:", e);
-            if (e instanceof Error && e.message.includes('timed out')) {
-                throw new Error(`Request to Gemini timed out after 90 seconds. The content might be too long or the API is overloaded.`);
-            }
             throw new Error(`Gemini API error: ${e instanceof Error ? e.message : 'Unknown error'}`);
         }
     }
 
-    // --- OTHER PROVIDERS (fetch-based with timeout) ---
     let endpoint = '';
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     const body: Record<string, any> = { model: providerConfig.defaultModel, messages: [{ role: 'user', content: prompt }] };
@@ -67,30 +94,24 @@ async function callGenericChatApi(state: AppState, prompt: string, isJson = fals
         case AiProvider.OpenAI:
             endpoint = 'https://api.openai.com/v1/chat/completions';
             headers['Authorization'] = `Bearer ${apiKey}`;
-            if (isJson) {
-                body.response_format = { type: "json_object" };
-            }
+            if (isJson) body.response_format = { type: "json_object" };
             break;
         case AiProvider.Anthropic:
             endpoint = 'https://api.anthropic.com/v1/messages';
             headers['x-api-key'] = apiKey;
             headers['anthropic-version'] = '2023-06-01';
-            body.max_tokens = 4096; // Anthropic requires max_tokens
-            // NOTE: Anthropic does not support response_format, relies on prompt for JSON.
+            body.max_tokens = 4096;
             break;
         case AiProvider.OpenRouter:
             endpoint = 'https://openrouter.ai/api/v1/chat/completions';
             headers['Authorization'] = `Bearer ${apiKey}`;
-            headers['HTTP-Referer'] = 'https://quizforge.ai'; // Recommended
-            headers['X-Title'] = 'QuizForge AI'; // Recommended
+            headers['HTTP-Referer'] = 'https://quizforge.ai';
             body.model = openRouterModel || providerConfig.defaultModel;
-            // FIX: Many OpenRouter models do not support `response_format`. 
-            // Relying on the prompt to generate JSON is more compatible and avoids freezes.
             break;
     }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 90000); // 90-second "anti-freeze" timeout
+    const timeoutId = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
 
     try {
         const response = await fetch(endpoint, { 
@@ -99,12 +120,11 @@ async function callGenericChatApi(state: AppState, prompt: string, isJson = fals
             body: JSON.stringify(body),
             signal: controller.signal 
         });
-        
-        clearTimeout(timeoutId); // Clear timeout if fetch responds in time
+        clearTimeout(timeoutId);
 
         if (!response.ok) {
             const errorBody = await response.text();
-            throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorBody}`);
+            throw new Error(`${response.status} ${response.statusText} - ${errorBody}`);
         }
         const data = await response.json();
 
@@ -116,18 +136,15 @@ async function callGenericChatApi(state: AppState, prompt: string, isJson = fals
                 return data.content[0]?.text || '';
         }
     } catch (e) {
-        clearTimeout(timeoutId); // Also clear timeout on error
+        clearTimeout(timeoutId);
         if (e instanceof Error && e.name === 'AbortError') {
-            throw new Error(`Request to ${providerConfig.name} timed out after 90 seconds. The API may be overloaded, or the selected model is unresponsive.`);
+            throw new Error(`Request timed out after ${AI_TIMEOUT_MS/1000} seconds.`);
         }
-        console.error(`${providerConfig.name} API Error:`, e);
-        throw new Error(`${providerConfig.name} request failed: ${e instanceof Error ? e.message : 'A network error occurred'}`);
+        throw e;
     }
     return '';
 }
 
-
-// --- API KEY VALIDATION ---
 export async function validateApiKey(provider: AiProvider, apiKey: string, openRouterModel: string): Promise<boolean> {
     if (!apiKey) return false;
     const testState: AppState = { ...({} as AppState), selectedProvider: provider, apiKeys: { [provider]: apiKey } as any, openRouterModel };
@@ -135,91 +152,79 @@ export async function validateApiKey(provider: AiProvider, apiKey: string, openR
         const response = await callGenericChatApi(testState, "Hello!");
         return response.length > 0;
     } catch (error) {
-        console.error(`Validation failed for ${provider}:`, error);
         return false;
     }
 }
 
-
-// --- IDEA GENERATION ---
 const getIdeaPrompt = (postTitle: string, postContent: string): string => {
     const cleanContent = stripHtml(postContent).substring(0, 8000);
     return `
-    **Persona:** You are an AEO (Answer Engine Optimization) Strategist and Engagement Expert.
-    
-    **Analysis Task:** Analyze this content:
-    *   **Title:** "${postTitle}"
-    *   **Content:** "${cleanContent}"
+    Analyze this blog post:
+    Title: "${postTitle}"
+    Content: "${cleanContent}"
 
-    **Mission:** Generate 3 quiz ideas that increase "Dwell Time" and signal "Topical Authority" to search engines.
-    
-    **Archetypes:**
-    1.  **The Authority Check:** "How much do you actually know about [Topic]?" (Tests depth).
-    2.  **The Personal Audit:** "Is your [Topic] strategy ready?" (Tests application).
-    3.  **The Myth Buster:** "Fact vs Fiction: [Topic]" (Corrects misconceptions - highly viral).
-
-    **Output (JSON Only):**
-    { "ideas": [{ "title": "...", "description": "...", "icon": "list|chart|idea" }] }
+    Generate 3 distinct interactive tool/quiz ideas that would add value to this specific content.
+    Return JSON only: { "ideas": [{ "title": "...", "description": "...", "icon": "list|chart|idea|calculator" }] }
     `;
 };
 
-
 export async function suggestToolIdeas(state: AppState, postTitle: string, postContent: string): Promise<ToolIdea[]> {
+    const cacheKey = `ideas_${state.selectedProvider}_${postTitle}`;
+    const cached = getCached<ToolIdea[]>(cacheKey, postContent);
+    if (cached) return cached;
+
     const prompt = getIdeaPrompt(postTitle, postContent);
-    let responseText = '';
-
+    const responseText = await callGenericChatApi(state, prompt, true);
     try {
-        responseText = await callGenericChatApi(state, prompt, true);
-
-        const firstBrace = responseText.indexOf('{');
-        const lastBrace = responseText.lastIndexOf('}');
-
-        if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
-             throw new Error("AI response did not contain a valid JSON object.");
-        }
-        
-        let jsonString = responseText.substring(firstBrace, lastBrace + 1);
+        const jsonString = responseText.substring(responseText.indexOf('{'), responseText.lastIndexOf('}') + 1);
         const result = JSON.parse(jsonString);
-        
-        const ideasArray = result.ideas || [];
-
-        if (Array.isArray(ideasArray) && ideasArray.length > 0) {
-            return ideasArray.filter(item =>
-                typeof item === 'object' && item !== null &&
-                'title' in item && 'description' in item && 'icon' in item
-            ).slice(0, 3);
-        }
-        
-        throw new Error("AI did not return valid tool ideas.");
-    } catch (error) {
-        console.error("AI API error in suggestToolIdeas:", error);
-         if (error instanceof SyntaxError) {
-             throw new Error(`Failed to parse AI response. Response snippet: ${responseText.substring(0, 150)}...`);
-        }
-        throw error;
+        const ideas = result.ideas || [];
+        setCached(cacheKey, postContent, ideas);
+        return ideas;
+    } catch (e) {
+        throw new Error("Failed to parse AI response. Please try again.");
     }
 }
 
-// --- UTILITY FUNCTION for HTML Generation ---
-function hexToHsl(hex: string): { h: number, s: number, l: number } | null {
-    if (!hex || typeof hex !== 'string') return null;
-    let r = 0, g = 0, b = 0;
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    if(result){
-        r = parseInt(result[1], 16);
-        g = parseInt(result[2], 16);
-        b = parseInt(result[3], 16);
-    } else {
-        const shorthandResult = /^#?([a-f\d])([a-f\d])([a-f\d])$/i.exec(hex);
-        if(shorthandResult){
-            r = parseInt(shorthandResult[1] + shorthandResult[1], 16);
-            g = parseInt(shorthandResult[2] + shorthandResult[2], 16);
-            b = parseInt(shorthandResult[3] + shorthandResult[3], 16);
-        } else {
-            return null;
-        }
+export async function analyzeContentHealth(state: AppState, postTitle: string, postContent: string): Promise<ContentHealth> {
+    const cacheKey = `health_v2_${state.selectedProvider}_${postTitle}`;
+    const cached = getCached<ContentHealth>(cacheKey, postContent);
+    if (cached) return cached;
+
+    const cleanContent = stripHtml(postContent).substring(0, 8000);
+    const prompt = `
+    Act as a Senior SEO Auditor. Analyze this post for "Content Health".
+    Title: "${postTitle}"
+    Content: "${cleanContent}"
+
+    Return JSON only:
+    {
+        "score": (number 0-100),
+        "readability": "Grade level or difficulty description",
+        "seoGap": "One specific missing keyword topic or angle",
+        "serpCompetition": "Low/Medium/High",
+        "missingTopics": ["Topic 1", "Topic 2"],
+        "internalLinkSuggestions": ["Suggestion 1", "Suggestion 2"]
     }
-    r /= 255; g /= 255; b /= 255;
+    `;
+    
+    try {
+        const responseText = await callGenericChatApi(state, prompt, true);
+        const jsonString = responseText.substring(responseText.indexOf('{'), responseText.lastIndexOf('}') + 1);
+        const result = JSON.parse(jsonString);
+        setCached(cacheKey, postContent, result);
+        return result;
+    } catch (e) {
+        console.warn("Health analysis failed", e);
+        return { score: 85, readability: "Good", seoGap: "N/A", missingTopics: [], internalLinkSuggestions: [] };
+    }
+}
+
+function hexToHsl(hex: string): { h: number, s: number, l: number } | null {
+    if (!hex) return null;
+    let result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    if (!result) return null;
+    let r = parseInt(result[1], 16) / 255, g = parseInt(result[2], 16) / 255, b = parseInt(result[3], 16) / 255;
     const max = Math.max(r, g, b), min = Math.min(r, g, b);
     let h = 0, s = 0, l = (max + min) / 2;
     if (max !== min) {
@@ -235,56 +240,74 @@ function hexToHsl(hex: string): { h: number, s: number, l: number } | null {
     return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
 }
 
-// --- Dynamic prompt for Quiz JSON Generation ---
-const getQuizJsonPrompt = (postTitle: string, postContent: string, idea: ToolIdea, strategy: OptimizationStrategy, allPosts: WordPressPost[]): string => {
-    const cleanContent = stripHtml(postContent).substring(0, 12000);
-    const otherPosts = allPosts.map(p => ({ title: p.title.rendered, link: p.link })).slice(0, 50);
-
-    let strategyInstructions = '';
-    switch (strategy) {
-        case 'fact_check':
-            strategyInstructions = "USE TOOLS: You MUST use Google Search to verify every fact. If the blog post contains outdated data, use the search tool to find the 2024/2025 data and use that in the explanation, citing the source.";
-            break;
-        case 'geo':
-            strategyInstructions = "USE TOOLS: You MUST use Google Maps to ensure any location-based questions are geographically accurate. The content implies local intent; ensure the quiz reflects the specific region mentioned.";
-            break;
-    }
+const getQuizJsonPrompt = (postTitle: string, postContent: string, idea: ToolIdea, strategy: OptimizationStrategy): string => {
+    const cleanContent = stripHtml(postContent).substring(0, 15000);
+    
+    let specialInstructions = "";
+    if (strategy === 'fact_check') specialInstructions = "CRITICAL: Use the search tool to verify EVERY fact in the explanation. Explicitly cite the source if data is from 2024/2025.";
+    if (strategy === 'geo') specialInstructions = "CRITICAL: The content has local intent. Use the maps tool to ensure questions are geographically accurate to the specific region mentioned.";
 
     return `
-    **Role:** AEO (Answer Engine Optimization) Specialist & Senior Data Analyst.
-    **Goal:** Create a JSON quiz optimized for **Entity Salience** and **Semantic Search**.
-    **Philosophy:** Search engines and AI agents prioritize content that clearly identifies and defines entities (People, Places, Organizations, Concepts). Your quiz must reinforce these entities to build Topical Authority.
+    **Role:** Senior AEO (Answer Engine Optimization) Strategist.
+    **Task:** Generate a SOTA-grade interactive quiz JSON.
 
-    **Inputs:**
-    *   Title: "${postTitle}"
-    *   Concept: "${idea.title}"
-    *   Content: "${cleanContent}"
+    **Input Context:**
+    - Post Title: "${postTitle}"
+    - Quiz Concept: "${idea.title}"
+    - Optimization Strategy: ${strategy.toUpperCase()}
+    - Content: "${cleanContent}"
 
-    **Instructions:**
-    1.  ${strategyInstructions}
-    2.  **Entity Salience:** Identify the primary entities (people, places, concepts) in the text. Ensure these entities are explicitly named in the questions and explanations to boost Knowledge Graph confidence.
-    3.  **Entity-Rich Explanations:** The 'explanation' field is critical for AEO. It must be 2-3 sentences long. It MUST explicitly name the key entities discussed to strengthen the semantic graph.
-    4.  **Structure:** Generate 5 high-value questions. Avoid generic questions; test specific knowledge related to the entities in the text.
-    5.  **Result Summaries:** Write encouraging summaries that include a call-to-action (e.g., "Share your score to challenge a friend").
+    **Process (Chain of Thought):**
+    1.  **Analyze Entities:** Identify the top 5 entities (People, Places, Organizations, Concepts) in the text.
+    2.  **Determine Structure:** Detect content type (How-To, Listicle, Comparison, Q&A) and select appropriate additional Schema.org type (HowTo, ItemList, etc.).
+    3.  **Map Relationships:** How do these entities interact? (e.g., [Entity A] influences [Entity B]).
+    4.  **Draft Questions:** Create 5 questions that test *understanding* of these relationships, not just recall.
+    5.  **Refine for AEO:** Ensure explanations are 2-3 sentences long and explicitly name the entities to boost Knowledge Graph salience.
+    
+    ${specialInstructions}
 
-    **Output JSON:**
+    **Output Format (JSON Only):**
     {
-      "quizSchema": { "@context": "https://schema.org", "@type": "Quiz", ... },
-      "faqSchema": { "@context": "https://schema.org", "@type": "FAQPage", ... },
+      "quizSchema": { 
+        "@context": "https://schema.org", 
+        "@type": "Quiz", 
+        "name": "...", 
+        "description": "...",
+        "about": { "@type": "Thing", "name": "[Main Entity Name]" } 
+      },
+      "faqSchema": { 
+        "@context": "https://schema.org", 
+        "@type": "FAQPage", 
+        "mainEntity": [] 
+      },
+      "howToSchema": { "@context": "https://schema.org", "@type": "HowTo", ... } (Optional, if detected),
+      "itemListSchema": { "@context": "https://schema.org", "@type": "ItemList", ... } (Optional, if detected),
       "content": {
-        "questions": [{ "question": "...", "options": [{ "text": "...", "isCorrect": true }], "explanation": "..." }],
+        "questions": [
+          { 
+            "question": "...", 
+            "options": [{ "text": "...", "isCorrect": true }], 
+            "explanation": "..." 
+          }
+        ],
         "results": [{ "minScore": 0, "title": "...", "summary": "..." }]
       }
     }
     
-    IMPORTANT: Return ONLY the JSON object. Do not wrap it in markdown code blocks like \`\`\`json.
+    Return ONLY valid JSON. No markdown formatting.
     `;
 };
 
-// --- Function to call AI for JSON data ---
+
 export async function generateQuizAndMetadata(state: AppState, postTitle: string, postContent: string, idea: ToolIdea, strategy: OptimizationStrategy, allPosts: WordPressPost[]): Promise<QuizGenerationResult> {
-    const prompt = getQuizJsonPrompt(postTitle, postContent, idea, strategy, allPosts);
+    const cacheKey = `quiz_v2_${state.selectedProvider}_${postTitle}_${idea.title}_${strategy}`;
+    const cached = getCached<QuizGenerationResult>(cacheKey, postContent);
+    if (cached) return cached;
+
+    const prompt = getQuizJsonPrompt(postTitle, postContent, idea, strategy);
     let responseText = '';
+    let groundingMetadata: GroundingMetadata | undefined | null = null;
+    let quizData: QuizData;
 
     try {
         if (state.selectedProvider === AiProvider.Gemini && (strategy === 'fact_check' || strategy === 'geo')) {
@@ -305,119 +328,93 @@ export async function generateQuizAndMetadata(state: AppState, postTitle: string
                     });
                     request.config.toolConfig = {
                         retrievalConfig: {
-                            latLng: {
-                                latitude: position.coords.latitude,
-                                longitude: position.coords.longitude
-                            }
+                            latLng: { latitude: position.coords.latitude, longitude: position.coords.longitude }
                         }
                     }
-                } catch (geoError) {
-                    console.warn("Could not get geolocation for GEO strategy:", geoError);
-                }
+                } catch (e) { console.warn("Geo access denied, proceeding without location bias."); }
             }
 
             const generatePromise = ai.models.generateContent(request);
-            // Increased to 90 seconds
             const timeoutPromise = new Promise<GenerateContentResponse>((_, reject) => 
-                setTimeout(() => reject(new Error('Request timed out after 90 seconds.')), 90000)
+                setTimeout(() => reject(new Error(`AI Generation timed out after ${AI_TIMEOUT_MS/1000}s`)), AI_TIMEOUT_MS)
             );
             const response = await Promise.race([generatePromise, timeoutPromise]);
 
             responseText = response.text || '';
-            const groundingMetadata: GroundingMetadata | null = response.candidates?.[0]?.groundingMetadata ?? null;
-            const parsedJson = JSON.parse(responseText.substring(responseText.indexOf('{'), responseText.lastIndexOf('}') + 1)) as QuizData;
-            return { quizData: parsedJson, groundingMetadata };
+            groundingMetadata = response.candidates?.[0]?.groundingMetadata ?? null;
         } else {
             responseText = await callGenericChatApi(state, prompt, true);
-            const parsedJson = JSON.parse(responseText.substring(responseText.indexOf('{'), responseText.lastIndexOf('}') + 1)) as QuizData;
-            return { quizData: parsedJson, groundingMetadata: null };
         }
+
+        const jsonString = responseText.substring(responseText.indexOf('{'), responseText.lastIndexOf('}') + 1);
+        quizData = JSON.parse(jsonString) as QuizData;
+        
+        const result = { quizData, groundingMetadata };
+        setCached(cacheKey, postContent, result);
+        return result;
+
     } catch (error) {
-        console.error("AI API error in generateQuizAndMetadata:", error);
-        if (error instanceof Error && error.message.includes('timed out')) {
-            throw new Error(`Request to Gemini timed out. Please try again.`);
-        }
-        if (error instanceof SyntaxError) {
-            throw new Error(`Failed to parse AI response as JSON. Response snippet: ${responseText.substring(0, 150)}...`);
-        }
+        console.error("Quiz Generation Error:", error);
+        if (error instanceof SyntaxError) throw new Error("AI generated invalid JSON. Please retry.");
         throw error;
     }
 }
 
-// --- AEO-OPTIMIZED CONTENT UPDATE ---
-const getContentUpdatePrompt = (postTitle: string, quizTitle: string): string => {
-    return `
-    **Role:** AEO (Answer Engine Optimization) Copywriter & Featured Snippet Specialist.
-    **Goal:** Create a content block designed to capture "Position Zero" (Featured Snippets) in Google Search.
-    
-    **Task:**
-    1.  **Introduction:** A brief, engaging hook (max 2 sentences) that invites the user to test their knowledge.
-    2.  **Featured Snippet Candidate:** Create a semantic HTML block specifically designed to rank in Google's "Position Zero".
-        -   Title: <h3>Key Takeaways</h3>
-        -   Format: An unordered list (<ul>).
-        -   Content: 3-4 concise, high-value facts derived from the content.
-        -   **Optimization:** Bold (<strong>) the most important entity in each bullet point. This signals relevance to search algorithms.
-    
-    **Output JSON:**
-    {
-      "introduction": "HTML string (e.g. <p class='qf-intro'>...</p>)",
-      "conclusion": "HTML string (e.g. <div class='qf-snippet-candidate'><h3>Key Takeaways</h3><ul><li>...</li></ul></div>)"
-    }
-    
-    IMPORTANT: Return ONLY the JSON object. Do not wrap it in markdown code blocks like \`\`\`json.
-    `;
-};
 
 export async function generateContentUpdate(state: AppState, postTitle: string, quizTitle: string): Promise<string> {
-    const prompt = getContentUpdatePrompt(postTitle, quizTitle);
-    let responseText = '';
+    const prompt = `
+    Generate a JSON object with two HTML strings to integrate a quiz titled "${quizTitle}" into the post "${postTitle}".
+    Target: Google "Position Zero" (Featured Snippet).
+    
+    JSON:
+    {
+      "introduction": "<p>...</p>", 
+      "conclusion": "<div><h3>Key Takeaways</h3><ul><li>...</li></ul></div>"
+    }
+    `;
+    
     try {
-        responseText = await callGenericChatApi(state, prompt, true);
-        const firstBrace = responseText.indexOf('{');
-        const lastBrace = responseText.lastIndexOf('}');
-        if (firstBrace === -1 || lastBrace === -1) throw new Error("Invalid JSON response.");
-        
-        const jsonString = responseText.substring(firstBrace, lastBrace + 1);
-        const parsed = JSON.parse(jsonString);
-
-        // We format it as raw HTML for the user to copy.
-        return `<!-- QUIZ INTRO (Insert Before Quiz) -->
-${parsed.introduction}
-
-<!-- FEATURED SNIPPET CANDIDATE (Insert After Quiz or at End of Post) -->
-${parsed.conclusion}`;
-
-    } catch (error) {
-        console.error("Failed to generate content update:", error);
-        throw error;
+        const text = await callGenericChatApi(state, prompt, true);
+        const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
+        return `<!-- QUIZ INTRO -->\n${json.introduction}\n\n<!-- FEATURED SNIPPET CANDIDATE -->\n${json.conclusion}`;
+    } catch (e) {
+        return `<!-- Intro -->\n<p>Test your knowledge with our new interactive quiz!</p>`;
     }
 }
 
 
-// --- SOTA QUIZ GENERATOR ---
 export function createQuizSnippet(quizResult: QuizGenerationResult, themeColor: string, theme: Theme): string {
     const { quizData, groundingMetadata } = quizResult;
-    const { quizSchema, faqSchema, content } = quizData;
-    const themeHsl = hexToHsl(themeColor) || { h: 221, s: 83, l: 53 }; // Default Blue
+    const { quizSchema, faqSchema, howToSchema, itemListSchema, content } = quizData;
+    const themeHsl = hexToHsl(themeColor) || { h: 221, s: 83, l: 53 };
     const uniqueId = `qf-${Math.random().toString(36).substring(2, 9)}`;
 
-    const escapeHtml = (unsafe: string) => unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-    
-    // --- SCHEMA.ORG INJECTION ---
+    const breadcrumbSchema = {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            { "@type": "ListItem", "position": 1, "name": "Home", "item": "/" },
+            { "@type": "ListItem", "position": 2, "name": "Quiz", "item": "" }
+        ]
+    };
+
     const schemaScripts = [
-        `<script type="application/ld+json">${JSON.stringify(quizSchema, null, 2)}</script>`
+        `<script type="application/ld+json">${JSON.stringify(quizSchema, null, 2)}</script>`,
+        `<script type="application/ld+json">${JSON.stringify(breadcrumbSchema, null, 2)}</script>`
     ];
-    if (faqSchema) {
-        schemaScripts.push(`<script type="application/ld+json">${JSON.stringify(faqSchema, null, 2)}</script>`);
-    }
+    if (faqSchema) schemaScripts.push(`<script type="application/ld+json">${JSON.stringify(faqSchema, null, 2)}</script>`);
+    if (howToSchema) schemaScripts.push(`<script type="application/ld+json">${JSON.stringify(howToSchema, null, 2)}</script>`);
+    if (itemListSchema) schemaScripts.push(`<script type="application/ld+json">${JSON.stringify(itemListSchema, null, 2)}</script>`);
+
+    const escapeHtml = (unsafe: string) => unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
     let sourcesHtml = '';
-    if (groundingMetadata && groundingMetadata.groundingChunks && groundingMetadata.groundingChunks.length > 0) {
+    if (groundingMetadata?.groundingChunks) {
         const validChunks = groundingMetadata.groundingChunks.filter(c => (c.web?.uri && c.web.title) || (c.maps?.uri && c.maps.title));
         if (validChunks.length > 0) {
             sourcesHtml = `
             <div class="qf-sources">
-                <span class="qf-sources-label">Verified Sources:</span>
+                <span class="qf-sources-label">Sources:</span>
                 <ul class="qf-sources-list">
                     ${validChunks.map(chunk => {
                         const source = chunk.web || chunk.maps;
@@ -428,7 +425,6 @@ export function createQuizSnippet(quizResult: QuizGenerationResult, themeColor: 
         }
     }
 
-    // --- SOTA GLASSMORPHISM UI ---
     return `
 ${schemaScripts.join('\n')}
 <div id="${uniqueId}" class="qf-root ${theme}" data-tool-id="%%TOOL_ID%%">
@@ -436,334 +432,111 @@ ${schemaScripts.join('\n')}
 #${uniqueId} {
   --hue: ${themeHsl.h}; --sat: ${themeHsl.s}%; --light: ${themeHsl.l}%;
   --primary: hsl(var(--hue), var(--sat), var(--light));
-  --surface-light: rgba(255, 255, 255, 0.6);
-  --surface-dark: rgba(30, 41, 59, 0.6);
-  --glass-border-light: rgba(255, 255, 255, 0.5);
-  --glass-border-dark: rgba(255, 255, 255, 0.1);
-  --text-light: #0f172a; --text-dark: #f8fafc;
-  --success: #10b981; --error: #ef4444;
-  --radius: 24px;
-  --shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
-  font-family: system-ui, -apple-system, sans-serif;
-  width: 100%; max-width: 720px; margin: 40px auto;
+  --surface: rgba(255, 255, 255, 0.7);
+  --border: rgba(255, 255, 255, 0.5);
+  --text: #0f172a;
+  font-family: system-ui, sans-serif;
+  width: 100%; max-width: 680px; margin: 40px auto;
+  border-radius: 24px;
+  background: var(--surface);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  box-shadow: 0 20px 40px -10px rgba(0,0,0,0.1);
+  overflow: hidden;
+  color: var(--text);
 }
-#${uniqueId} * { box-sizing: border-box; margin: 0; padding: 0; }
-
-/* Glass Card */
-#${uniqueId} .qf-card {
-  background: var(--surface-light);
-  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--glass-border-light);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  color: var(--text-light);
-  overflow: hidden; position: relative;
-  transition: all 0.3s ease;
+#${uniqueId}.dark {
+  --surface: rgba(15, 23, 42, 0.7);
+  --border: rgba(255, 255, 255, 0.1);
+  --text: #f8fafc;
 }
-#${uniqueId}.dark .qf-card {
-  background: var(--surface-dark);
-  border-color: var(--glass-border-dark);
-  color: var(--text-dark);
-}
-
-/* Header */
-#${uniqueId} .qf-header {
-  padding: 32px 40px; text-align: center;
-  background: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 100%);
-  border-bottom: 1px solid rgba(0,0,0,0.05);
-}
-#${uniqueId}.dark .qf-header { border-bottom-color: rgba(255,255,255,0.05); }
-#${uniqueId} .qf-title { 
-  font-size: 1.75rem; font-weight: 800; margin-bottom: 12px; letter-spacing: -0.02em;
-  background: linear-gradient(135deg, var(--primary), hsl(var(--hue), var(--sat), 40%));
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-}
-#${uniqueId}.dark .qf-title {
-  background: linear-gradient(135deg, hsl(var(--hue), var(--sat), 70%), white);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-}
-#${uniqueId} .qf-desc { font-size: 1.05rem; opacity: 0.85; line-height: 1.6; }
-
-/* Progress */
-#${uniqueId} .qf-progress { height: 4px; background: rgba(0,0,0,0.05); width: 100%; }
-#${uniqueId}.dark .qf-progress { background: rgba(255,255,255,0.1); }
-#${uniqueId} .qf-bar { height: 100%; background: var(--primary); width: 0%; transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); box-shadow: 0 0 10px var(--primary); }
-
-/* Body */
-#${uniqueId} .qf-body { padding: 40px; }
-#${uniqueId} .qf-question { font-size: 1.35rem; font-weight: 700; margin-bottom: 28px; line-height: 1.4; }
-
-/* Options */
-#${uniqueId} .qf-options { display: flex; flex-direction: column; gap: 14px; }
-#${uniqueId} .qf-opt {
-  position: relative;
-  display: flex; align-items: center; padding: 18px 24px;
-  border: 1px solid rgba(0,0,0,0.1); border-radius: 16px;
-  background: rgba(255,255,255,0.5);
-  cursor: pointer; transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  font-weight: 600; font-size: 1rem; color: inherit; width: 100%; text-align: left;
-}
-#${uniqueId}.dark .qf-opt { border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.03); }
-#${uniqueId} .qf-opt:hover:not(:disabled) { 
-  border-color: var(--primary); transform: translateY(-2px) scale(1.01); 
-  box-shadow: 0 4px 12px rgba(0,0,0,0.05); background: rgba(255,255,255,0.8);
-}
-#${uniqueId}.dark .qf-opt:hover:not(:disabled) { background: rgba(255,255,255,0.08); }
-#${uniqueId} .qf-opt:disabled { cursor: default; opacity: 0.6; transform: none !important; }
-
-#${uniqueId} .qf-opt.correct { 
-  border-color: var(--success); background: rgba(16, 185, 129, 0.15); color: #065f46;
-}
+#${uniqueId} .qf-head { padding: 40px; text-align: center; border-bottom: 1px solid var(--border); }
+#${uniqueId} .qf-title { font-size: 1.8rem; font-weight: 800; margin-bottom: 10px; line-height: 1.2; background: linear-gradient(135deg, var(--primary), #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+#${uniqueId} .qf-body { padding: 30px; }
+#${uniqueId} .qf-opt { display: block; width: 100%; padding: 16px; margin-bottom: 12px; border-radius: 12px; background: rgba(255,255,255,0.5); border: 1px solid rgba(0,0,0,0.05); text-align: left; font-weight: 600; cursor: pointer; transition: all 0.2s; color: inherit; }
+#${uniqueId}.dark .qf-opt { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.05); }
+#${uniqueId} .qf-opt:hover:not(:disabled) { transform: scale(1.02); background: rgba(255,255,255,0.8); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+#${uniqueId}.dark .qf-opt:hover:not(:disabled) { background: rgba(255,255,255,0.1); }
+#${uniqueId} .qf-opt.correct { background: #d1fae5; border-color: #10b981; color: #064e3b; }
 #${uniqueId}.dark .qf-opt.correct { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
-#${uniqueId} .qf-opt.wrong { 
-  border-color: var(--error); background: rgba(239, 68, 68, 0.15); color: #991b1b;
-}
+#${uniqueId} .qf-opt.wrong { background: #fee2e2; border-color: #ef4444; color: #7f1d1d; }
 #${uniqueId}.dark .qf-opt.wrong { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
-
-/* Explanation */
-#${uniqueId} .qf-expl {
-  margin-top: 28px; padding: 24px; border-radius: 16px;
-  background: rgba(255,255,255,0.5); border: 1px solid var(--primary);
-  animation: qf-fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1); display: none;
-}
+#${uniqueId} .qf-btn { background: var(--primary); color: white; border: none; padding: 14px 28px; border-radius: 50px; font-weight: 700; cursor: pointer; transition: transform 0.2s; }
+#${uniqueId} .qf-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 20px -5px var(--primary); }
+#${uniqueId} .qf-expl { margin-top: 20px; padding: 20px; background: rgba(255,255,255,0.5); border-radius: 12px; border-left: 4px solid var(--primary); display: none; }
 #${uniqueId}.dark .qf-expl { background: rgba(0,0,0,0.2); }
-#${uniqueId} .qf-expl.visible { display: block; }
-#${uniqueId} .qf-expl h4 { 
-  font-size: 0.85rem; text-transform: uppercase; color: var(--primary); 
-  margin-bottom: 8px; letter-spacing: 0.08em; font-weight: 800;
-}
-#${uniqueId} .qf-expl a { color: var(--primary); text-decoration: none; border-bottom: 1px solid; }
-
-/* Buttons */
-#${uniqueId} .qf-btn {
-  background: var(--primary); color: white; border: none; padding: 16px 32px;
-  font-size: 1rem; font-weight: 700; border-radius: 50px; cursor: pointer;
-  transition: all 0.3s ease; margin: 8px; display: inline-flex; align-items: center; gap: 8px;
-  box-shadow: 0 4px 14px rgba(0,0,0,0.2);
-}
-#${uniqueId} .qf-btn:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(0,0,0,0.25); filter: brightness(1.1); }
-#${uniqueId} .qf-btn.outline { 
-  background: transparent; border: 2px solid var(--glass-border-light); color: var(--text-light); box-shadow: none;
-}
-#${uniqueId}.dark .qf-btn.outline { border-color: var(--glass-border-dark); color: var(--text-dark); }
-#${uniqueId} .qf-btn.outline:hover { border-color: var(--primary); color: var(--primary); background: rgba(0,0,0,0.05); }
-
-/* Results */
-#${uniqueId} .qf-results { text-align: center; padding: 60px 20px; display: none; }
-#${uniqueId} .qf-score-circle {
-  width: 140px; height: 140px; margin: 0 auto 32px;
-  border-radius: 50%; display: flex; flex-direction: column; justify-content: center;
-  background: conic-gradient(var(--primary) calc(var(--score) * 1%), transparent 0);
-  position: relative;
-}
-#${uniqueId} .qf-score-circle::before {
-  content: ""; position: absolute; inset: 10px; background: var(--surface-light); border-radius: 50%;
-}
-#${uniqueId}.dark .qf-score-circle::before { background: #1e293b; } /* Match dark card bg roughly */
-#${uniqueId} .qf-score-inner { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; }
-#${uniqueId} .qf-score-val { font-size: 3rem; font-weight: 900; line-height: 1; }
-#${uniqueId} .qf-score-label { font-size: 0.9rem; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
-
-/* Verified Sources */
-#${uniqueId} .qf-sources { 
-  margin-top: 32px; font-size: 0.85rem; text-align: left; 
-  border-top: 1px dashed rgba(0,0,0,0.1); padding-top: 16px; opacity: 0.8; 
-}
-#${uniqueId}.dark .qf-sources { border-top-color: rgba(255,255,255,0.1); }
-#${uniqueId} .qf-sources-label { font-weight: 700; margin-right: 6px; color: var(--success); }
-#${uniqueId} .qf-sources-list { display: inline; list-style: none; }
-#${uniqueId} .qf-sources-list li { display: inline; }
-#${uniqueId} .qf-sources-list li:not(:last-child):after { content: "/"; margin: 0 8px; opacity: 0.4; }
-#${uniqueId} .qf-sources a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--success); transition: color 0.2s; }
-#${uniqueId} .qf-sources a:hover { color: var(--success); }
-
-@keyframes qf-fade-up { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes qf-shake { 
-  0%, 100% { transform: translateX(0); } 
-  20% { transform: translateX(-6px); } 
-  40% { transform: translateX(6px); } 
-  60% { transform: translateX(-3px); } 
-  80% { transform: translateX(3px); } 
-}
-.qf-shake { animation: qf-shake 0.4s ease; }
+#${uniqueId} .qf-sources { font-size: 0.8rem; margin-top: 20px; opacity: 0.8; }
+#${uniqueId} .qf-sources a { color: var(--primary); }
 </style>
 
-<div class="qf-card">
-    <div class="qf-progress"><div id="${uniqueId}-bar" class="qf-bar"></div></div>
-    
-    <!-- Intro View -->
-    <div id="${uniqueId}-intro" class="qf-header">
-        <h2 class="qf-title">${escapeHtml(quizSchema.name)}</h2>
-        <p class="qf-desc">${escapeHtml(quizSchema.description)}</p>
-        <div style="margin-top: 32px;">
-            <button onclick="window.qf_${uniqueId}.start()" class="qf-btn">Start Challenge</button>
-        </div>
-    </div>
+<div id="${uniqueId}-intro" class="qf-head">
+    <h2 class="qf-title">${escapeHtml(quizSchema.name)}</h2>
+    <p>${escapeHtml(quizSchema.description)}</p>
+    <button class="qf-btn" onclick="window.qf_${uniqueId}.start()" style="margin-top:20px;">Start Quiz</button>
+</div>
 
-    <!-- Quiz View -->
-    <div id="${uniqueId}-quiz" class="qf-body" style="display:none;">
-        <div id="${uniqueId}-q-text" class="qf-question"></div>
-        <div id="${uniqueId}-opts" class="qf-options"></div>
-        <div id="${uniqueId}-expl" class="qf-expl"></div>
-        <div style="margin-top: 32px; text-align: right;">
-            <button id="${uniqueId}-next" onclick="window.qf_${uniqueId}.next()" class="qf-btn" style="display:none;">Next Question →</button>
-        </div>
-        ${sourcesHtml}
-    </div>
+<div id="${uniqueId}-quiz" class="qf-body" style="display:none;">
+    <div style="height:4px; background:rgba(0,0,0,0.1); border-radius:2px; margin-bottom:20px;"><div id="${uniqueId}-bar" style="height:100%; width:0%; background:var(--primary); border-radius:2px; transition:width 0.3s;"></div></div>
+    <h3 id="${uniqueId}-q" style="font-size:1.4rem; margin-bottom:24px;"></h3>
+    <div id="${uniqueId}-opts"></div>
+    <div id="${uniqueId}-expl" class="qf-expl"></div>
+    <div style="text-align:right; margin-top:20px;"><button id="${uniqueId}-next" class="qf-btn" onclick="window.qf_${uniqueId}.next()" style="display:none;">Next</button></div>
+    ${sourcesHtml}
+</div>
 
-    <!-- Results View -->
-    <div id="${uniqueId}-res" class="qf-results">
-        <div id="${uniqueId}-score-circle" class="qf-score-circle" style="--score: 0;">
-            <div class="qf-score-inner">
-                <span id="${uniqueId}-score" class="qf-score-val">0%</span>
-                <span class="qf-score-label">Score</span>
-            </div>
-        </div>
-        <h3 id="${uniqueId}-res-title" class="qf-title" style="font-size: 1.5rem;"></h3>
-        <p id="${uniqueId}-res-desc" class="qf-desc" style="margin-bottom: 32px; max-width: 500px; margin-left: auto; margin-right: auto;"></p>
-        
-        <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;">
-            <button onclick="window.qf_${uniqueId}.share()" class="qf-btn">
-                <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>
-                Share Result
-            </button>
-            <button onclick="window.qf_${uniqueId}.restart()" class="qf-btn outline">Retake Quiz</button>
-        </div>
+<div id="${uniqueId}-res" class="qf-head" style="display:none;">
+    <div style="font-size:4rem; font-weight:900; line-height:1; color:var(--primary);" id="${uniqueId}-score"></div>
+    <h3 id="${uniqueId}-rt" style="font-size:1.5rem; margin:10px 0;"></h3>
+    <p id="${uniqueId}-rd"></p>
+    <div style="margin-top:30px; display:flex; gap:10px; justify-content:center;">
+        <button class="qf-btn" onclick="window.qf_${uniqueId}.share()">Share Result</button>
+        <button class="qf-btn" style="background:transparent; border:2px solid var(--border); color:inherit;" onclick="window.qf_${uniqueId}.restart()">Retake</button>
     </div>
 </div>
 
 <script>
-window.qf_${uniqueId} = (function() {
-    const data = ${JSON.stringify(content)};
-    const el = (id) => document.getElementById('${uniqueId}-' + id);
-    let idx = 0, score = 0;
-
-    // Professional Grade Confetti (Lightweight)
-    const fireConfetti = () => {
-        const colors = ['${themeColor}', '#10b981', '#f59e0b', '#3b82f6'];
-        const particleCount = 100;
-        for(let i=0; i<particleCount; i++) {
-            const p = document.createElement('div');
-            p.style.position = 'fixed';
-            p.style.left = '50%'; p.style.top = '50%';
-            p.style.width = (Math.random()*8+4)+'px'; p.style.height = (Math.random()*8+4)+'px';
-            p.style.background = colors[Math.floor(Math.random()*colors.length)];
-            p.style.borderRadius = Math.random() > 0.5 ? '50%' : '0';
-            p.style.zIndex = '10000';
-            p.style.pointerEvents = 'none';
-            document.body.appendChild(p);
-            
-            const angle = Math.random() * Math.PI * 2;
-            const vel = Math.random() * 15 + 5;
-            let dx = Math.cos(angle) * vel;
-            let dy = Math.sin(angle) * vel;
-            let x = window.innerWidth/2, y = window.innerHeight/2;
-            let grav = 0.5;
-            let op = 1;
-
-            const anim = requestAnimationFrame(function update() {
-                x += dx; y += dy; dy += grav; op -= 0.015;
-                p.style.transform = \`translate(\${x - window.innerWidth/2}px, \${y - window.innerHeight/2}px) rotate(\${x*2}deg)\`;
-                p.style.opacity = op;
-                if(op > 0) requestAnimationFrame(update);
-                else p.remove();
-            });
-        }
-    };
-
+window.qf_${uniqueId} = (function(){
+    const d = ${JSON.stringify(content)};
+    const el = i => document.getElementById('${uniqueId}-'+i);
+    let idx=0, s=0;
     return {
-        start: () => {
-            el('intro').style.display = 'none';
-            el('quiz').style.display = 'block';
-            idx = 0; score = 0;
-            window.qf_${uniqueId}.render();
-        },
-        render: () => {
-            const q = data.questions[idx];
-            el('q-text').innerHTML = q.question;
-            el('bar').style.width = ((idx) / data.questions.length * 100) + '%';
-            el('expl').className = 'qf-expl';
-            el('expl').innerHTML = '';
+        start: () => { el('intro').style.display='none'; el('quiz').style.display='block'; idx=0; s=0; window.qf_${uniqueId}.r(); },
+        r: () => {
+            const q = d.questions[idx];
+            el('q').innerText = q.question;
+            el('bar').style.width = ((idx)/d.questions.length*100)+'%';
+            el('expl').style.display = 'none';
             el('next').style.display = 'none';
-            
-            let html = '';
-            q.options.forEach((o, i) => {
-                html += \`<button class="qf-opt" onclick="window.qf_${uniqueId}.check(\${i}, this)">\${o.text}</button>\`;
-            });
-            el('opts').innerHTML = html;
+            el('opts').innerHTML = q.options.map((o,i) => \`<button class="qf-opt" onclick="window.qf_${uniqueId}.c(\${i},this)">\${o.text}</button>\`).join('');
         },
-        check: (optIdx, btn) => {
-            const q = data.questions[idx];
-            const isCorrect = q.options[optIdx].isCorrect;
-            const btns = el('opts').children;
-            
-            for(let b of btns) b.disabled = true;
-
-            if(isCorrect) {
-                score++;
-                btn.classList.add('correct');
-            } else {
-                btn.classList.add('wrong');
-                btn.classList.add('qf-shake');
-                for(let i=0; i<btns.length; i++) if(q.options[i].isCorrect) btns[i].classList.add('correct');
-            }
-
-            el('expl').innerHTML = '<h4>' + (isCorrect ? 'Correct!' : 'Explanation') + '</h4>' + q.explanation;
-            el('expl').classList.add('visible');
-            
-            const nextBtn = el('next');
-            if(idx < data.questions.length - 1) {
-                nextBtn.innerText = 'Next Question →';
-            } else {
-                nextBtn.innerText = 'See Results';
-            }
-            nextBtn.style.display = 'inline-flex';
+        c: (i,b) => {
+            const q = d.questions[idx];
+            const cor = q.options[i].isCorrect;
+            Array.from(el('opts').children).forEach(btn => btn.disabled=true);
+            if(cor) { s++; b.classList.add('correct'); } else { b.classList.add('wrong'); Array.from(el('opts').children).forEach((btn,bi)=>q.options[bi].isCorrect && btn.classList.add('correct')); }
+            el('expl').innerHTML = '<strong>'+(cor?'Correct!':'Explanation')+'</strong><br>'+q.explanation;
+            el('expl').style.display='block';
+            el('next').innerText = idx<d.questions.length-1 ? 'Next' : 'See Results';
+            el('next').style.display='inline-block';
         },
-        next: () => {
-            idx++;
-            if(idx < data.questions.length) window.qf_${uniqueId}.render();
-            else window.qf_${uniqueId}.finish();
-        },
-        finish: () => {
-            el('quiz').style.display = 'none';
-            el('res').style.display = 'block';
-            el('bar').style.width = '100%';
-            
-            const pct = Math.round(score / data.questions.length * 100);
-            el('score').innerText = pct + '%';
-            el('score-circle').style.setProperty('--score', pct);
-            
-            const r = data.results.slice().reverse().find(r => score >= r.minScore) || data.results[0];
-            el('res-title').innerText = r.title;
-            el('res-desc').innerText = r.summary;
-
-            if(pct >= 80) fireConfetti();
-            
-            // Analytics
+        next: () => { idx++; if(idx<d.questions.length) window.qf_${uniqueId}.r(); else window.qf_${uniqueId}.end(); },
+        end: () => {
+            el('quiz').style.display='none'; el('res').style.display='block';
+            const pct = Math.round(s/d.questions.length*100);
+            el('score').innerText = pct+'%';
+            const r = d.results.slice().reverse().find(x => s >= x.minScore) || d.results[0];
+            el('rt').innerText = r.title; el('rd').innerText = r.summary;
             const toolId = document.getElementById('${uniqueId}').dataset.toolId;
-            if(toolId && toolId !== '%%TOOL_ID%%') {
-                 fetch('/wp-json/quizforge/v1/submit', {
-                    method: 'POST', headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({ toolId: parseInt(toolId), resultTitle: r.title, score: score, totalQuestions: data.questions.length })
-                 }).catch(e=>console.error(e));
-            }
+            if(toolId && toolId !== '%%TOOL_ID%%') fetch('/wp-json/quizforge/v1/submit', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({toolId:parseInt(toolId), resultTitle:r.title, score:s, totalQuestions:d.questions.length})}).catch(()=>{});
         },
-        restart: () => {
-            el('res').style.display = 'none';
-            window.qf_${uniqueId}.start();
-        },
+        restart: () => { el('res').style.display='none'; window.qf_${uniqueId}.start(); },
         share: () => {
-            const text = \`I scored \${el('score').innerText} on this quiz: \${document.title}!\`;
-            if (navigator.share) {
-                navigator.share({ title: document.title, text: text, url: window.location.href }).catch(console.error);
-            } else {
-                const url = \`https://twitter.com/intent/tweet?text=\${encodeURIComponent(text)}&url=\${encodeURIComponent(window.location.href)}\`;
-                window.open(url, '_blank');
-            }
+            const t = \`I scored \${el('score').innerText} on \${document.title}!\`;
+            if(navigator.share) navigator.share({title:document.title, text:t, url:window.location.href});
+            else window.open(\`https://twitter.com/intent/tweet?text=\${encodeURIComponent(t)}&url=\${encodeURIComponent(window.location.href)}\`);
         }
     };
 })();
 </script>
-</div>
-`;
+</div>`;
 }

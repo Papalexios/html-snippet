@@ -16,6 +16,7 @@ import { WorldIcon } from './icons/FormIcons';
 import { SearchIcon } from './icons/SearchIcon';
 import { LightbulbIcon } from './icons/LightbulbIcon';
 import { CheckCircleIcon } from './icons/CheckCircleIcon';
+import { ChartIcon } from './icons/ToolIcons';
 
 const loadingMessages = [
     "Analyzing post for key topics...",
@@ -90,10 +91,45 @@ const StrategyOption: React.FC<{
     </label>
 );
 
+// New Component: Content Health Scorecard
+const ContentHealthCard: React.FC<{ health: import('../types').ContentHealth }> = ({ health }) => (
+    <div className="mb-6 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+        <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                <ChartIcon className="w-4 h-4 text-purple-500" />
+                Autonomous Content Analyzer
+            </h3>
+            <span className={`px-2 py-1 text-xs font-bold rounded-full ${health.score >= 80 ? 'bg-green-100 text-green-800' : health.score >= 50 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
+                Health Score: {health.score}/100
+            </span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div>
+                <span className="font-semibold text-slate-500 dark:text-slate-400 block mb-1">SEO Gap detected:</span>
+                <p className="text-slate-800 dark:text-slate-200">{health.seoGap}</p>
+            </div>
+            <div>
+                 <span className="font-semibold text-slate-500 dark:text-slate-400 block mb-1">Readability:</span>
+                 <p className="text-slate-800 dark:text-slate-200">{health.readability}</p>
+            </div>
+        </div>
+        {health.missingTopics.length > 0 && (
+             <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700/50">
+                 <span className="font-semibold text-slate-500 dark:text-slate-400 text-xs block mb-1">Topics to add for authority:</span>
+                 <div className="flex flex-wrap gap-2">
+                     {health.missingTopics.map((topic, i) => (
+                         <span key={i} className="px-2 py-0.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-xs text-slate-600 dark:text-slate-300">{topic}</span>
+                     ))}
+                 </div>
+             </div>
+        )}
+    </div>
+);
+
 
 export default function ToolGenerationModal() {
     const { state, closeToolGenerationModal, generateIdeasForModal, selectIdea, generateEnhancedQuizForModal, insertSnippet, setThemeColor } = useAppContext();
-    const { isToolGenerationModalOpen, activePostForModal, modalStatus, modalError, toolIdeas, selectedIdea, generatedQuizHtml, themeColor, manualShortcode, suggestedContentUpdate } = state;
+    const { isToolGenerationModalOpen, activePostForModal, modalStatus, modalError, toolIdeas, contentHealth, selectedIdea, generatedQuizHtml, themeColor, manualShortcode, suggestedContentUpdate } = state;
 
     const [loadingMessage, setLoadingMessage] = useState(loadingMessages[0]);
     const [activeTab, setActiveTab] = useState<'preview' | 'code'>('preview');
@@ -104,18 +140,17 @@ export default function ToolGenerationModal() {
     const [contentUpdateCopied, setContentUpdateCopied] = useState(false);
     const [currentStep, setCurrentStep] = useState(0);
 
-    const isGeneratingIdeas = modalStatus === 'loading' && toolIdeas.length === 0;
-    const isGeneratingQuiz = modalStatus === 'loading' && !!selectedIdea && !generatedQuizHtml;
-    const isInserting = modalStatus === 'loading' && !!generatedQuizHtml && !isGeneratingQuiz;
-
+    // Robust State Logic
     const currentStage = useMemo(() => {
         if (modalStatus === 'success') return 'success';
         if (generatedQuizHtml) return 'publish';
-        // CRITICAL FIX: Only show generation screen if we are actually loading.
-        // If modalStatus is 'error', we fall back to 'ideas' so the user can retry.
         if (modalStatus === 'loading' && selectedIdea) return 'generate'; 
         return 'ideas';
     }, [modalStatus, selectedIdea, generatedQuizHtml]);
+
+    const isGeneratingIdeas = modalStatus === 'loading' && toolIdeas.length === 0;
+    const isGeneratingQuiz = currentStage === 'generate';
+    const isInserting = modalStatus === 'loading' && !!generatedQuizHtml && !isGeneratingQuiz;
 
     useEffect(() => {
         if (isToolGenerationModalOpen && !activePostForModal) {
@@ -171,7 +206,7 @@ export default function ToolGenerationModal() {
                     }
                     return prevStep + 1;
                 });
-            }, 2500);
+            }, 3000); 
         }
         return () => clearInterval(interval);
     }, [isGeneratingQuiz, generationSteps.length]);
@@ -190,6 +225,10 @@ export default function ToolGenerationModal() {
         setTimeout(() => setContentUpdateCopied(false), 2500);
     };
 
+    const handleCancelGeneration = () => {
+        closeToolGenerationModal();
+    };
+
     if (!isToolGenerationModalOpen || !activePostForModal) return null;
 
     const renderIdeasStage = () => (
@@ -198,6 +237,9 @@ export default function ToolGenerationModal() {
                 <h2 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100">1. Choose a Quiz Idea</h2>
                 <p className="text-slate-600 dark:text-slate-400 mt-1">Select the concept that best fits your post's goal.</p>
             </div>
+            
+            {contentHealth && <ContentHealthCard health={contentHealth} />}
+            
             {isGeneratingIdeas ? (
                  <div className="text-center">
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
@@ -250,7 +292,7 @@ export default function ToolGenerationModal() {
                 AI is Crafting Your Quiz...
             </h3>
             <p className="mt-2 mb-8 text-sm text-slate-500 dark:text-slate-400 max-w-md">
-                This advanced process ensures a high-quality, engaging quiz. Please wait a moment.
+                This process checks facts, optimizes for SEO, and generates code. It may take up to 2 minutes.
             </p>
             <div className="w-full max-w-md space-y-4 text-left">
                 {generationSteps.map((step, index) => (
@@ -288,6 +330,10 @@ export default function ToolGenerationModal() {
                     </div>
                 ))}
             </div>
+            
+            <button onClick={handleCancelGeneration} className="mt-8 text-sm text-slate-400 hover:text-red-500 transition-colors underline">
+                Cancel Generation
+            </button>
         </div>
     );
     

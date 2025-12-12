@@ -74,6 +74,9 @@ export interface QuizData {
           acceptedAnswer: { '@type': 'Answer', 'text': string };
       }[];
   };
+  // SOTA: Advanced Schema Support
+  howToSchema?: any; 
+  itemListSchema?: any;
   content: {
     questions: {
       question: string;
@@ -88,8 +91,15 @@ export interface QuizData {
   };
 }
 
+// --- SOTA TYPES ---
+export interface ContentHealth {
+  score: number; // 0-100
+  readability: string;
+  seoGap: string;
+  missingTopics: string[];
+  internalLinkSuggestions: string[];
+}
 
-// --- NEW SEO/GEO/AEO Types ---
 export type OptimizationStrategy = 'standard' | 'fact_check' | 'geo';
 
 export interface GroundingChunk {
@@ -138,6 +148,7 @@ export interface AppState {
   modalStatus: Status; // Status specific to the modal's async operations
   modalError: string | null;
   toolIdeas: ToolIdea[];
+  contentHealth: ContentHealth | null; // New SOTA Field
   selectedIdea: ToolIdea | null;
   generatedQuizHtml: string;
   suggestedContentUpdate: string | null;
